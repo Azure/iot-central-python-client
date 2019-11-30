@@ -1,0 +1,14 @@
+# Python
+exp.py
+.pytest_cache/
+**/__pycache__
+*.pyc
+*.pyo
+
+# VSCODE
+.vscode/
+
+# publish
+iotc.egg-info
+build
+dist

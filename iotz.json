@@ -1,0 +1,4 @@
+{
+  "name": "iotc-device",
+  "toolchain": "micro-python"
+}
