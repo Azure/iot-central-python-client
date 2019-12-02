@@ -6,9 +6,9 @@ from random import randint
 
 
 
-deviceId = "py4"
-scopeId = "0ne0009AC0E"
-key = "djD3Cx3HzdyoX/gLSmw33pNwde/LovdJiXbbzR4ybrDwOBbuKyd17efy/DwDtc91f/kaWQbMqdPqS2buJf5zOA=="
+deviceId = "DEVICEID"
+scopeId = "SCOPEID"
+key = "SYMM_KEY"
 
 # see iotc.Device documentation above for x509 argument sample
 iotc = iotc.Device(scopeId, key, deviceId,
@@ -25,6 +25,7 @@ def onconnect(info):
     print("- [onconnect] => status:" + str(info.getStatusCode()))
     if info.getStatusCode() == 0:
         if iotc.isConnected():
+            iotc.sendProperty({"$iotin:deviceinfo": {"osName": {"value": "PythonOS"},"processorArchitecture": {"value": "x86"}}})
             gCanSend = True
 
 
