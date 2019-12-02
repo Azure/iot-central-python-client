@@ -903,11 +903,12 @@ class Device:
         return self.sendTelemetry(data)
 
     def sendProperty(self, data):
+        if not isinstance(data, str):
+            data = json.dumps(data)
         LOG_IOTC("- iotc :: sendProperty :: " +
                  data, IOTLogLevel.IOTC_LOGGING_ALL)
         topic = '$iothub/twin/PATCH/properties/reported/?$rid={}'.format(
-            int(time.time()))
-
+            uuid.uuid4())
         return self._sendCommon(topic, data)
 
     def disconnect(self):
