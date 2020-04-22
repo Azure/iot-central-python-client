@@ -1,6 +1,6 @@
 #!/bin/bash
 
-rm -rf build/ dist/ src/iotc/iotc_device.egg-info src/iotc/_pycache_ src/iotc/_init_.pyc
+rm -rf build/ dist/ src/azure/iotcentral/device/client/iotc_device.egg-info src/azure/iotcentral/device/client/_pycache_ src/azure/iotcentral/device/client/_init_.pyc
 
 TEST=""
 if [[ $1 == 'test' ]]; then

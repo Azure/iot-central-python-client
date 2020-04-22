@@ -18,15 +18,12 @@ else: # micropython
   file_path = file_path[:len(file_path) - 1] if file_path[len(file_path) - 1:] == "b" else file_path
   sys.path.append(file_path + "../src")
 
-import iotc
-from iotc import IOTConnectType, IOTLogLevel
+import sys
+sys.path.insert(0, 'src')
+from azure.iotcentral.device.client.aio import IOTCConnectType,IOTCLogLevel
 import json
 
 pytest_run = False
-def test_LOG_IOTC():
-  global pytest_run
-  pytest_run = True
-  assert iotc.LOG_IOTC("LOGME") == 0
 
 def CALLBACK_(info):
   if info.getPayload() == "{\"number\":1}":
