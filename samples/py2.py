@@ -28,7 +28,7 @@ iotc = IoTCClient(deviceId, scopeId,
 iotc.setModelId('c318d580-39fc-4aca-b995-843719821049/1.5.0')
 iotc.setLogLevel(IOTCLogLevel.IOTC_LOGGING_ALL)
 iotc.on(IOTCEvents.IOTC_PROPERTIES, onProps)
-iotc.on(IOTCEvents.IOTC_COMMAND, onCommands)
+# iotc.on(IOTCEvents.IOTC_COMMAND, onCommands)
 
 # iotc.setQosLevel(IOTQosLevel.IOTC_QOS_AT_MOST_ONCE)
 

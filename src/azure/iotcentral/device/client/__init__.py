@@ -114,6 +114,7 @@ class IoTCClient:
         self._scopeId = scopeId
         self._credType = credType
         self._keyORCert = keyOrCert
+        self._modelId = None
         self._protocol = IOTCProtocol.IOTC_PROTOCOL_MQTT
         self._connected = False
         self._events = {}
@@ -150,7 +151,7 @@ class IoTCClient:
         while True:
             propCb = self._events[IOTCEvents.IOTC_PROPERTIES]
             patch = self._deviceClient.receive_twin_desired_properties_patch()
-            self._logger.debug('Received desired properties. {}'.format(patch))
+            self._logger.debug('\nReceived desired properties. {}\n'.format(patch))
 
             if propCb:
                 for prop in patch:
@@ -170,19 +171,21 @@ class IoTCClient:
                     else:
                         self._logger.debug(
                             'Property "{}" unsuccessfully processed'.format(prop))
+            else:
+                self._logger.debug('Callback not found')
 
+    def _cmdAck(self,name, value, requestId):
+        self.sendProperty({
+            '{}'.format(name): {
+                'value': value,
+                'requestId': requestId
+            }
+        })
+    
     def _onCommands(self):
         self._logger.debug('Setup commands listener')
 
-        def cmdAck(name, value, requestId):
-            self.sendProperty({
-                '{}'.format(name): {
-                    'value': value,
-                    'requestId': requestId
-                }
-            })
         while True:
-            cmdCb = self._events[IOTCEvents.IOTC_COMMAND]
             # Wait for unknown method calls
             method_request = self._deviceClient.receive_method_request()
             self._logger.debug(
@@ -191,9 +194,11 @@ class IoTCClient:
                 method_request, 200, {
                     'result': True, 'data': 'Command received'}
             ))
-
-            if cmdCb:
-                cmdCb(method_request, cmdAck)
+            try:
+                cmdCb = self._events[IOTCEvents.IOTC_COMMAND]
+                cmdCb(method_request)
+            except KeyError:
+                self._logger.debug('Callback not found')
 
     def _sendMessage(self, payload, properties, callback=None):
         msg = Message(payload)
@@ -219,8 +224,8 @@ class IoTCClient:
         if self._credType in (IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, IOTCConnectType.IOTC_CONNECT_SYMM_KEY):
             if self._credType == IOTCConnectType.IOTC_CONNECT_SYMM_KEY:
                 self._keyORCert = self._computeDerivedSymmetricKey(
-                    self._keyORCert, self._deviceId).decode('UTF-8')
-                # self._logger.debug('Device key: {}'.format(devKey))
+                    self._keyORCert, self._deviceId)
+                self._logger.debug('Device key: {}'.format(self._keyORCert))
                 # self._keyORCert = devKey
                 self._provisioningClient = ProvisioningDeviceClient.create_from_symmetric_key(
                     self._globalEndpoint, self._deviceId, self._scopeId, self._keyORCert)
@@ -262,9 +267,9 @@ class IoTCClient:
         listen_thread_props.daemon = True
         listen_thread_props.start()
 
-        listen_thread_props = threading.Thread(target=self._onCommands)
-        listen_thread_props.daemon = True
-        listen_thread_props.start()
+        listen_thread_commands = threading.Thread(target=self._onCommands)
+        listen_thread_commands.daemon = True
+        listen_thread_commands.start()
 
     def _computeDerivedSymmetricKey(self, secret, regId):
         # pylint: disable=no-member
@@ -277,6 +282,6 @@ class IoTCClient:
             sys.exit()
 
         if gIsMicroPython == False:
-            return base64.b64encode(hmac.new(secret, msg=regId.encode('utf8'), digestmod=hashlib.sha256).digest())
+            return base64.b64encode(hmac.new(secret, msg=regId.encode('utf8'), digestmod=hashlib.sha256).digest()).decode('utf-8')
         else:
             return base64.b64encode(hmac.new(secret, msg=regId.encode('utf8'), digestmod=hashlib._sha256.sha256).digest())
