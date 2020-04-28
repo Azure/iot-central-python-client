@@ -3,6 +3,7 @@ __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
 import sys
 import threading
+import time
 from azure.iot.device import IoTHubDeviceClient
 from azure.iot.device import ProvisioningDeviceClient
 from azure.iot.device import Message, MethodResponse
@@ -118,6 +119,8 @@ class IoTCClient:
         self._protocol = IOTCProtocol.IOTC_PROTOCOL_MQTT
         self._connected = False
         self._events = {}
+        self._propThread = None
+        self._cmdThread = None
         self._globalEndpoint = "global.azure-devices-provisioning.net"
         if logger is None:
             self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
@@ -125,54 +128,83 @@ class IoTCClient:
             self._logger = logger
 
     def isConnected(self):
+        """
+        Check if device is connected to IoTCentral
+        :returns: Connection state
+        :rtype: bool
+        """
         if self._connected:
             return True
         else:
             return False
 
     def setProtocol(self, protocol):
+        """
+        Set the connection protocol to be used.
+        :param IOTCProtocol protocol: One protocol between MQTT, AMQP and HTTPS (default MQTT)
+        """
         self._protocol = protocol
 
     def setGlobalEndpoint(self, endpoint):
+        """
+        Set the device provisioning endpoint.
+        :param str endpoint: Custom device provisioning endpoint. Default ('global.azure-devices-provisioning.net')
+        """
         self._globalEndpoint = endpoint
 
     def setModelId(self, modelId):
+        """
+        Set the model Id for the device to be associated
+        :param str modelId: Id for an existing model in the IoTCentral app
+        """
         self._modelId = modelId
 
     def setLogLevel(self, logLevel):
+        """
+        Set the logging level
+        :param IOTCLogLevel: Logging level. Available options are: ALL, API_ONLY, DISABLE
+        """
         self._logger.setLogLevel(logLevel)
 
     def on(self, eventname, callback):
+        """
+        Set a listener for a specific event
+        :param IOTCEvents eventname: Supported events: IOTC_PROPERTIES, IOTC_COMMANDS
+        :param function callback: Function executed when the specified event occurs
+        """
         self._events[eventname] = callback
         return 0
 
     def _onProperties(self):
         self._logger.debug('Setup properties listener')
         while True:
-            propCb = self._events[IOTCEvents.IOTC_PROPERTIES]
+            try:
+                propCb = self._events[IOTCEvents.IOTC_PROPERTIES]
+            except KeyError:
+                self._logger.debug('Properties callback not found')
+                time.sleep(10)
+                continue
+            
             patch = self._deviceClient.receive_twin_desired_properties_patch()
             self._logger.debug('\nReceived desired properties. {}\n'.format(patch))
+            
+            for prop in patch:
+                if prop == '$version':
+                    continue
 
-            if propCb:
-                for prop in patch:
-                    if prop == '$version':
-                        continue
-
-                    ret = propCb(prop, patch[prop]['value'])
-                    if ret:
-                        self._logger.debug('Acknowledging {}'.format(prop))
-                        self.sendProperty({
-                            '{}'.format(prop): {
-                                "value": patch[prop]["value"],
-                                'status': 'completed',
-                                'desiredVersion': patch['$version'],
-                                'message': 'Property received'}
-                        })
-                    else:
-                        self._logger.debug(
-                            'Property "{}" unsuccessfully processed'.format(prop))
-            else:
-                self._logger.debug('Callback not found')
+                ret = propCb(prop, patch[prop]['value'])
+                if ret:
+                    self._logger.debug('Acknowledging {}'.format(prop))
+                    self.sendProperty({
+                        '{}'.format(prop): {
+                            "value": patch[prop]["value"],
+                            'status': 'completed',
+                            'desiredVersion': patch['$version'],
+                            'message': 'Property received'}
+                    })
+                else:
+                    self._logger.debug(
+                        'Property "{}" unsuccessfully processed'.format(prop))
 
     def _cmdAck(self,name, value, requestId):
         self.sendProperty({
@@ -184,8 +216,13 @@ class IoTCClient:
     
     def _onCommands(self):
         self._logger.debug('Setup commands listener')
-
         while True:
+            try:
+                cmdCb = self._events[IOTCEvents.IOTC_COMMAND]
+            except KeyError:
+                self._logger.debug('Commands callback not found')
+                time.sleep(10)
+                continue
             # Wait for unknown method calls
             method_request = self._deviceClient.receive_method_request()
             self._logger.debug(
@@ -194,11 +231,8 @@ class IoTCClient:
                 method_request, 200, {
                     'result': True, 'data': 'Command received'}
             ))
-            try:
-                cmdCb = self._events[IOTCEvents.IOTC_COMMAND]
-                cmdCb(method_request)
-            except KeyError:
-                self._logger.debug('Callback not found')
+            cmdCb(method_request,self._cmdAck)
+            
 
     def _sendMessage(self, payload, properties, callback=None):
         msg = Message(payload)
@@ -211,23 +245,38 @@ class IoTCClient:
             callback()
 
     def sendProperty(self, payload, callback=None):
+        """
+        Send a property message
+        :param dict payload: The properties payload. Can contain multiple properties in the form {'<propName>':{'value':'<propValue>'}}
+        :param function callback: Function executed after successfull dispatch
+        """
         self._logger.debug('Sending property {}'.format(json.dumps(payload)))
         self._deviceClient.patch_twin_reported_properties(payload)
         if callback is not None:
             callback()
 
     def sendTelemetry(self, payload, properties=None, callback=None):
+        """
+        Send a telemetry message
+        :param dict payload: The telemetry payload. Can contain multiple telemetry fields in the form {'<fieldName1>':<fieldValue1>,...,'<fieldNameN>':<fieldValueN>}
+        :param dict optional properties: An object with custom properties to add to the message.
+        :param function callback: Function executed after successfull dispatch
+        """
         self._logger.info('Sending telemetry message: {}'.format(payload))
         self._sendMessage(json.dumps(payload), properties, callback)
 
     def connect(self):
+        """
+        Connects the device.
+        :raises exception: If connection fails
+        """
         if self._credType in (IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, IOTCConnectType.IOTC_CONNECT_SYMM_KEY):
             if self._credType == IOTCConnectType.IOTC_CONNECT_SYMM_KEY:
                 self._keyORCert = self._computeDerivedSymmetricKey(
                     self._keyORCert, self._deviceId)
                 self._logger.debug('Device key: {}'.format(self._keyORCert))
-                # self._keyORCert = devKey
-                self._provisioningClient = ProvisioningDeviceClient.create_from_symmetric_key(
+
+            self._provisioningClient = ProvisioningDeviceClient.create_from_symmetric_key(
                     self._globalEndpoint, self._deviceId, self._scopeId, self._keyORCert)
         else:
             self._keyfile = self._keyORCert["keyfile"]
@@ -249,27 +298,29 @@ class IoTCClient:
             self._deviceClient = IoTHubDeviceClient.create_from_connection_string(
                 self._hubCString)
         except:
+            t, v, tb = sys.exc_info()
             self._logger.info(
                 'ERROR: Failed to get device provisioning information')
-            sys.exit()
+            raise t(v)
         # Connect to iothub
         try:
             self._deviceClient.connect()
             self._connected = True
             self._logger.debug('Device connected')
         except:
+            t, v, tb = sys.exc_info()
             self._logger.info('ERROR: Failed to connect to Hub')
-            sys.exit()
+            raise t(v)
 
         # setup listeners
 
-        listen_thread_props = threading.Thread(target=self._onProperties)
-        listen_thread_props.daemon = True
-        listen_thread_props.start()
+        self._propThread = threading.Thread(target=self._onProperties)
+        self._propThread.daemon = True
+        self._propThread.start()
 
-        listen_thread_commands = threading.Thread(target=self._onCommands)
-        listen_thread_commands.daemon = True
-        listen_thread_commands.start()
+        self._cmdThread = threading.Thread(target=self._onCommands)
+        self._cmdThread.daemon = True
+        self._cmdThread.start()
 
     def _computeDerivedSymmetricKey(self, secret, regId):
         # pylint: disable=no-member

@@ -111,9 +111,13 @@ class IoTCClient:
         self._scopeId = scopeId
         self._credType = credType
         self._keyORCert = keyOrCert
+        self._modelId = None
         self._protocol = IOTCProtocol.IOTC_PROTOCOL_MQTT
         self._connected = False
         self._events = {}
+        # self._threads = None
+        self._cmdThread = None
+        self._propThread = None
         self._globalEndpoint = "global.azure-devices-provisioning.net"
         if logger is None:
             self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
@@ -145,41 +149,51 @@ class IoTCClient:
     async def _onProperties(self):
         self._logger.debug('Setup properties listener')
         while True:
-            propCb = self._events[IOTCEvents.IOTC_PROPERTIES]
+            try:
+                propCb = self._events[IOTCEvents.IOTC_PROPERTIES]
+            except KeyError:
+                self._logger.debug('Properties callback not found')
+                await asyncio.sleep(10)
+                continue
             patch = await self._deviceClient.receive_twin_desired_properties_patch()
             self._logger.debug('Received desired properties. {}'.format(patch))
 
-            if propCb:
-                for prop in patch:
-                    if prop == '$version':
-                        continue
+            for prop in patch:
+                if prop == '$version':
+                    continue
 
-                    ret = await propCb(prop, patch[prop]['value'])
-                    if ret:
-                        self._logger.debug('Acknowledging {}'.format(prop))
-                        await self.sendProperty({
-                            '{}'.format(prop): {
-                                "value": patch[prop]["value"],
-                                'status': 'completed',
-                                'desiredVersion': patch['$version'],
-                                'message': 'Property received'}
-                        })
-                    else:
-                        self._logger.debug(
-                            'Property "{}" unsuccessfully processed'.format(prop))
+                ret = await propCb(prop, patch[prop]['value'])
+                if ret:
+                    self._logger.debug('Acknowledging {}'.format(prop))
+                    await self.sendProperty({
+                        '{}'.format(prop): {
+                            "value": patch[prop]["value"],
+                            'status': 'completed',
+                            'desiredVersion': patch['$version'],
+                            'message': 'Property received'}
+                    })
+                else:
+                    self._logger.debug(
+                        'Property "{}" unsuccessfully processed'.format(prop))
+
+    async def _cmdAck(self,name, value, requestId):
+        await self.sendProperty({
+            '{}'.format(name): {
+                'value': value,
+                'requestId': requestId
+            }
+        })
 
     async def _onCommands(self):
         self._logger.debug('Setup commands listener')
 
-        async def cmdAck(name, value, requestId):
-            await self.sendProperty({
-                '{}'.format(name): {
-                    'value': value,
-                    'requestId': requestId
-                }
-            })
         while True:
-            cmdCb = self._events[IOTCEvents.IOTC_COMMAND]
+            try:
+                cmdCb = self._events[IOTCEvents.IOTC_COMMAND]
+            except KeyError:
+                self._logger.debug('Commands callback not found')
+                await asyncio.sleep(10)
+                continue
             # Wait for unknown method calls
             method_request = await self._deviceClient.receive_method_request()
             self._logger.debug(
@@ -188,9 +202,8 @@ class IoTCClient:
                 method_request, 200, {
                     'result': True, 'data': 'Command received'}
             ))
+            await cmdCb(method_request, self._cmdAck)
 
-            if cmdCb:
-                await cmdCb(method_request, cmdAck)
 
     async def _sendMessage(self, payload, properties, callback= None):
         msg = Message(payload)
@@ -216,10 +229,11 @@ class IoTCClient:
         if self._credType in (IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, IOTCConnectType.IOTC_CONNECT_SYMM_KEY):
             if self._credType == IOTCConnectType.IOTC_CONNECT_SYMM_KEY:
                 self._keyORCert = self._computeDerivedSymmetricKey(
-                    self._keyORCert, self._deviceId).decode('UTF-8')
-                # self._logger.debug('Device key: {}'.format(devKey))
-                # self._keyORCert = devKey
-                self._provisioningClient = ProvisioningDeviceClient.create_from_symmetric_key(
+                    self._keyORCert, self._deviceId)
+            
+            self._logger.debug('Device key: {}'.format(self._keyORCert))
+
+            self._provisioningClient = ProvisioningDeviceClient.create_from_symmetric_key(
                     self._globalEndpoint, self._deviceId, self._scopeId, self._keyORCert)
         else:
             self._keyfile = self._keyORCert["keyfile"]
@@ -254,8 +268,13 @@ class IoTCClient:
             sys.exit()
 
         # setup listeners
-        asyncio.create_task(self._onProperties())
-        asyncio.create_task(self._onCommands())
+        self._propThread = asyncio.create_task(self._onProperties())
+        await self._propThread
+        #self._cmdThread = asyncio.create_task(self._onCommands())
+        # self._threads = await asyncio.gather(
+        #     self._onProperties(),
+        #     self._onCommands()
+        # )
 
     def _computeDerivedSymmetricKey(self, secret, regId):
         # pylint: disable=no-member
@@ -268,6 +287,6 @@ class IoTCClient:
             sys.exit()
 
         if gIsMicroPython == False:
-            return base64.b64encode(hmac.new(secret, msg=regId.encode('utf8'), digestmod=hashlib.sha256).digest())
+            return base64.b64encode(hmac.new(secret, msg=regId.encode('utf8'), digestmod=hashlib.sha256).digest()).decode('utf-8')
         else:
             return base64.b64encode(hmac.new(secret, msg=regId.encode('utf8'), digestmod=hashlib._sha256.sha256).digest())
