@@ -9,10 +9,10 @@ from azure.iotcentral.device.client.aio import IoTCClient, IOTCConnectType, IOTC
 
 deviceId = "<DEVICE_ID>"
 scopeId = "<SCOPE_ID>"
-key = '<DEVICE_OR_GROUP_KEY>'
+key = {'certFile':'<CERT_CHAIN_FILE_PATH>','keyFile':'<CERT_KEY_FILE_PATH>','certPhrase':'<CERT_PASSWORD>'}
 
 # optional model Id for auto-provisioning
-modelId= '<TEMPLATE_ID>'
+modelId= '<MODEL_ID>'
 
 
 async def onProps(propName, propValue):
@@ -27,7 +27,7 @@ async def onCommands(command, ack):
 
 # change connect type to reflect the used key (device or group)
 iotc = IoTCClient(deviceId, scopeId,
-                  IOTCConnectType.IOTC_CONNECT_SYMM_KEY, key)
+                  IOTCConnectType.IOTC_CONNECT_X509_CERT, key)
 iotc.setModelId(modelId)
 iotc.setLogLevel(IOTCLogLevel.IOTC_LOGGING_ALL)
 iotc.on(IOTCEvents.IOTC_PROPERTIES, onProps)

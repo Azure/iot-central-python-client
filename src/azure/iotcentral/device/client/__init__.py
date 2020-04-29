@@ -4,6 +4,7 @@ __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 import sys
 import threading
 import time
+from azure.iot.device import X509
 from azure.iot.device import IoTHubDeviceClient
 from azure.iot.device import ProvisioningDeviceClient
 from azure.iot.device import Message, MethodResponse
@@ -267,10 +268,16 @@ class IoTCClient:
             self._provisioningClient = ProvisioningDeviceClient.create_from_symmetric_key(
                     self._globalEndpoint, self._deviceId, self._scopeId, self._keyORCert)
         else:
-            self._keyfile = self._keyORCert["keyfile"]
-            self._certfile = self._keyORCert["certfile"]
+            self._keyfile = self._keyORCert['keyFile']
+            self._certfile = self._keyORCert['certFile']
+            try:
+                self._certPhrase=self._keyORCert['certPhrase']
+                x509=X509(self._certfile,self._keyfile,self._certPhrase)
+            except:
+                self._logger.debug('No passphrase available for certificate. Trying without it')
+                x509=X509(self._certfile,self._keyfile)
             # Certificate provisioning
-            # self._provisioningClient=ProvisioningDeviceClient.create_from_x509_certificate()
+            self._provisioningClient=ProvisioningDeviceClient.create_from_x509_certificate(provisioning_host=self._globalEndpoint,registration_id=self._deviceId,id_scope=self._scopeId,x509=x509)
 
         if self._modelId:
             self._provisioningClient.provisioning_payload = {
@@ -283,8 +290,11 @@ class IoTCClient:
                 assigned_hub, self._deviceId, self._keyORCert)
             self._logger.debug(
                 'IoTHub Connection string: {}'.format(self._hubCString))
-            self._deviceClient = IoTHubDeviceClient.create_from_connection_string(
-                self._hubCString)
+
+            if self._credType in (IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, IOTCConnectType.IOTC_CONNECT_SYMM_KEY):
+                self._deviceClient = IoTHubDeviceClient.create_from_connection_string(self._hubCString)
+            else:
+                self._deviceClient = IoTHubDeviceClient.create_from_x509_certificate(x509=x509,hostname=assigned_hub,device_id=registration_result.registration_state.device_id)
         except:
             t, v, tb = sys.exc_info()
             self._logger.info(

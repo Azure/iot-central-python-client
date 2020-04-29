@@ -5,8 +5,6 @@ exp.py
 *.pyc
 *.pyo
 
-samples/
-
 # VSCODE
 .vscode/
 
