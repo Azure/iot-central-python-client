@@ -29,19 +29,19 @@ from azure.iotcentral.device.client.aio import IoTCClient
 
 #### X509
 ```
-const iotCentral = require('azure-iotcentral-device-client');
+scopeId = 'scopeID';
+deviceId = 'deviceID';
+key = {'certFile':'<CERT_CHAIN_FILE_PATH>','keyFile':'<CERT_KEY_FILE_PATH>','certPhrase':'<CERT_PASSWORD>'}
 
-const scopeId = '';
-const deviceId = '';
-const passphrase = ''; //optional
-const cert = {
-    cert: "public cert"
-    key: "private key",
-    passphrase: "passphrase"
-}
-
-const iotc = new iotCentral.IoTCClient(deviceId, scopeId, 'X509_CERT', cert);
+iotc = IoTCClient(deviceId, scopeId,
+                  IOTCConnectType.IOTC_CONNECT_X509_CERT, key)
 ```
+IOTCConnectType enum can be imported from the same module of IoTCClient
+
+_'certPhrase'_ is optional and represents the password for the certificate if any
+
+**_A handy tool to generate self-signed certificates in order to test x509 authentication can be found in the IoTCentral Node.JS SDK [here.](https://github.com/lucadruda/iotc-nodejs-device-client#generate-x509-certificates)_**
+
 
 #### SAS
 ```
