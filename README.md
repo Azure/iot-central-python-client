@@ -13,6 +13,15 @@
 pip install azure-iotcentral-device-client
 ```
 
+## Samples
+Check out the [sample repository](samples) for example code showing how the SDK can be used in the various scenarios:
+
+*   Sending telemetry and receiving properties and commands with device connected through symmetric key (Python 2.7+)
+
+*   Sending telemetry and receiving properties and commands with device connected through symmetric key (Python 3.7+)
+*   Sending telemetry and receiving properties and commands with device connected through x509 certificates (Python 2.7+)
+*   Sending telemetry and receiving properties and commands with device connected through x509 certificates (Python 3.7+)
+
 ## Importing the module
 Sync client (Python 2.7+ and 3.7+) can be imported in this way:
 
