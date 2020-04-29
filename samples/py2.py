@@ -7,9 +7,12 @@ from azure.iotcentral.device.client import IoTCClient, IOTCConnectType, IOTCLogL
 
 
 
-deviceId = "nuovodev"
-scopeId = "0ne00052362"
-key = '68p6zEjwVNB6L/Dz8Wkz4VhaTrYqkndPrB0uJbWr2Hc/AmB+Qxz/eJJ9MIhLZFJ6hC0RmHMgfaYBkNTq84OCNQ=='
+deviceId = "<DEVICE_ID>"
+scopeId = "<SCOPE_ID>"
+key = '<DEVICE_OR_GROUP_KEY>'
+
+# optional model Id for auto-provisioning
+modelId= '<TEMPLATE_ID>'
 
 
 def onProps(propName, propValue):
@@ -25,12 +28,11 @@ def onCommands(command, ack):
 # see iotc.Device documentation above for x509 argument sample
 iotc = IoTCClient(deviceId, scopeId,
                   IOTCConnectType.IOTC_CONNECT_SYMM_KEY, key)
-iotc.setModelId('c318d580-39fc-4aca-b995-843719821049/1.5.0')
+iotc.setModelId(modelId)
 iotc.setLogLevel(IOTCLogLevel.IOTC_LOGGING_ALL)
 iotc.on(IOTCEvents.IOTC_PROPERTIES, onProps)
 # iotc.on(IOTCEvents.IOTC_COMMAND, onCommands)
 
-# iotc.setQosLevel(IOTQosLevel.IOTC_QOS_AT_MOST_ONCE)
 
 
 def main():

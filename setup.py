@@ -2,7 +2,7 @@ import setuptools
 import sys
 
 sys.path.insert(0, 'src')
-from iotc import __version__, __name__
+from azure.iotcentral.device.client import __version__, __name__
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -15,7 +15,7 @@ setuptools.setup(
     description="Azure IoT Central device client for Python",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/lucadruda/azure-iotcentral-device-client",
+    url="https://github.com/lucadruda/iotc-python-device-client",
     packages=setuptools.find_packages('src'),
     package_dir={'': 'src'},
     license="MIT",
@@ -27,10 +27,8 @@ setuptools.setup(
       'Programming Language :: Python :: 2',
       'Programming Language :: Python :: 2.7',
       'Programming Language :: Python :: 3',
-      'Programming Language :: Python :: 3.6',
-      'Programming Language :: Python :: Implementation :: CPython',
-      'Programming Language :: Python :: Implementation :: PyPy'
+      'Programming Language :: Python :: 3.8',
     ],
     include_package_data=True,
-    install_requires=["paho-mqtt", "httplib2"]
+    install_requires=["azure-iot-device"]
 )

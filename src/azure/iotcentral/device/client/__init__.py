@@ -9,7 +9,7 @@ from azure.iot.device import ProvisioningDeviceClient
 from azure.iot.device import Message, MethodResponse
 from datetime import datetime
 
-__version__ = "0.0.1-beta.2"
+__version__ = "0.2.0-beta.3"
 __name__ = "azure-iotcentral-device-client"
 
 
@@ -56,11 +56,6 @@ class IOTCConnectType:
     IOTC_CONNECT_X509_CERT = 2
     IOTC_CONNECT_DEVICE_KEY = 3
 
-
-class IOTCProtocol:
-    IOTC_PROTOCOL_MQTT = 1
-    IOTC_PROTOCOL_AMQP = 2
-    IOTC_PROTOCOL_HTTP = 4
 
 
 class IOTCLogLevel:
@@ -116,7 +111,6 @@ class IoTCClient:
         self._credType = credType
         self._keyORCert = keyOrCert
         self._modelId = None
-        self._protocol = IOTCProtocol.IOTC_PROTOCOL_MQTT
         self._connected = False
         self._events = {}
         self._propThread = None
@@ -138,12 +132,6 @@ class IoTCClient:
         else:
             return False
 
-    def setProtocol(self, protocol):
-        """
-        Set the connection protocol to be used.
-        :param IOTCProtocol protocol: One protocol between MQTT, AMQP and HTTPS (default MQTT)
-        """
-        self._protocol = protocol
 
     def setGlobalEndpoint(self, endpoint):
         """

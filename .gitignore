@@ -11,6 +11,6 @@ samples/
 .vscode/
 
 # publish
-iotc.egg-info
+azure_iotcentral_device_client.egg-info
 build
 dist

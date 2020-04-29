@@ -5,7 +5,7 @@ from azure.iot.device.aio import ProvisioningDeviceClient
 from azure.iot.device import Message, MethodResponse
 from datetime import datetime
 
-__version__ = "0.0.1-beta.2"
+__version__ = "0.2.0-beta.3"
 __name__ = "azure-iotcentral-device-client"
 
 
@@ -52,11 +52,6 @@ class IOTCConnectType:
     IOTC_CONNECT_X509_CERT = 2
     IOTC_CONNECT_DEVICE_KEY = 3
 
-
-class IOTCProtocol:
-    IOTC_PROTOCOL_MQTT = 1
-    IOTC_PROTOCOL_AMQP = 2
-    IOTC_PROTOCOL_HTTP = 4
 
 
 class IOTCLogLevel:
@@ -112,7 +107,6 @@ class IoTCClient:
         self._credType = credType
         self._keyORCert = keyOrCert
         self._modelId = None
-        self._protocol = IOTCProtocol.IOTC_PROTOCOL_MQTT
         self._connected = False
         self._events = {}
         # self._threads = None
@@ -125,24 +119,44 @@ class IoTCClient:
             self._logger = logger
 
     def isConnected(self):
+        """
+        Check if device is connected to IoTCentral
+        :returns: Connection state
+        :rtype: bool
+        """
         if self._connected:
             return True
         else:
             return False
 
-    def setProtocol(self, protocol):
-        self._protocol = protocol
 
     def setGlobalEndpoint(self, endpoint):
+        """
+        Set the device provisioning endpoint.
+        :param str endpoint: Custom device provisioning endpoint. Default ('global.azure-devices-provisioning.net')
+        """
         self._globalEndpoint = endpoint
 
     def setModelId(self, modelId):
+        """
+        Set the model Id for the device to be associated
+        :param str modelId: Id for an existing model in the IoTCentral app
+        """
         self._modelId = modelId
 
     def setLogLevel(self, logLevel):
+        """
+        Set the logging level
+        :param IOTCLogLevel: Logging level. Available options are: ALL, API_ONLY, DISABLE
+        """
         self._logger.setLogLevel(logLevel)
 
     def on(self, eventname, callback):
+        """
+        Set a listener for a specific event
+        :param IOTCEvents eventname: Supported events: IOTC_PROPERTIES, IOTC_COMMANDS
+        :param function callback: Function executed when the specified event occurs
+        """
         self._events[eventname] = callback
         return 0
 
@@ -216,16 +230,31 @@ class IoTCClient:
             callback()
 
     async def sendProperty(self, payload, callback=None):
+        """
+        Send a property message
+        :param dict payload: The properties payload. Can contain multiple properties in the form {'<propName>':{'value':'<propValue>'}}
+        :param function callback: Function executed after successfull dispatch
+        """
         self._logger.debug('Sending property {}'.format(json.dumps(payload)))
         await self._deviceClient.patch_twin_reported_properties(payload)
         if callback is not None:
             callback()
 
     async def sendTelemetry(self, payload, properties=None, callback=None):
+        """
+        Send a telemetry message
+        :param dict payload: The telemetry payload. Can contain multiple telemetry fields in the form {'<fieldName1>':<fieldValue1>,...,'<fieldNameN>':<fieldValueN>}
+        :param dict optional properties: An object with custom properties to add to the message.
+        :param function callback: Function executed after successfull dispatch
+        """
         self._logger.info('Sending telemetry message: {}'.format(payload))
         await self._sendMessage(json.dumps(payload), properties, callback)
 
     async def connect(self):
+        """
+        Connects the device.
+        :raises exception: If connection fails
+        """
         if self._credType in (IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, IOTCConnectType.IOTC_CONNECT_SYMM_KEY):
             if self._credType == IOTCConnectType.IOTC_CONNECT_SYMM_KEY:
                 self._keyORCert = self._computeDerivedSymmetricKey(
@@ -269,8 +298,7 @@ class IoTCClient:
 
         # setup listeners
         self._propThread = asyncio.create_task(self._onProperties())
-        await self._propThread
-        #self._cmdThread = asyncio.create_task(self._onCommands())
+        self._cmdThread = asyncio.create_task(self._onCommands())
         # self._threads = await asyncio.gather(
         #     self._onProperties(),
         #     self._onCommands()

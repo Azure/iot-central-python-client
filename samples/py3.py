@@ -1,16 +1,18 @@
 import sys
 sys.path.insert(0, 'src')
 
-import time
 import asyncio
 from random import randint
 from azure.iotcentral.device.client.aio import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
 
 
 
-deviceId = "nuovodev"
-scopeId = "0ne00052362"
-key = '68p6zEjwVNB6L/Dz8Wkz4VhaTrYqkndPrB0uJbWr2Hc/AmB+Qxz/eJJ9MIhLZFJ6hC0RmHMgfaYBkNTq84OCNQ=='
+deviceId = "<DEVICE_ID>"
+scopeId = "<SCOPE_ID>"
+key = '<DEVICE_OR_GROUP_KEY>'
+
+# optional model Id for auto-provisioning
+modelId= '<TEMPLATE_ID>'
 
 
 async def onProps(propName, propValue):
@@ -23,10 +25,10 @@ async def onCommands(command, ack):
     await ack(command.name, 'Command received', command.request_id)
 
 
-# see iotc.Device documentation above for x509 argument sample
+# change connect type to reflect the used key (device or group)
 iotc = IoTCClient(deviceId, scopeId,
                   IOTCConnectType.IOTC_CONNECT_SYMM_KEY, key)
-iotc.setModelId('c318d580-39fc-4aca-b995-843719821049/1.5.0')
+iotc.setModelId(modelId)
 iotc.setLogLevel(IOTCLogLevel.IOTC_LOGGING_ALL)
 iotc.on(IOTCEvents.IOTC_PROPERTIES, onProps)
 iotc.on(IOTCEvents.IOTC_COMMAND, onCommands)
@@ -42,7 +44,7 @@ async def main():
             'accelerometerY': str(randint(20, 45)),
             "accelerometerZ": str(randint(20, 45))
         })
-        time.sleep(3)
+        await asyncio.sleep(3)
 
 
 asyncio.run(main())

@@ -66,9 +66,7 @@ def async_return(result):
 
 async def stopThreads(iotc):
   iotc._propThread.cancel()
-  with suppress(asyncio.CancelledError):
-    return True
-  #iotc._cmdThread.cancel()
+  iotc._cmdThread.cancel()
   
   
 @pytest.mark.asyncio
@@ -91,7 +89,7 @@ async def test_deviceKeyGeneration(mocker):
   iotc = init(mocker)
   await iotc.connect()
   assert iotc._keyORCert == deviceKey
-  stopThreads(iotc)
+  await stopThreads(iotc)
 
 
 @pytest.mark.asyncio
@@ -99,14 +97,33 @@ async def test_hubConnectionString(mocker):
   iotc = init(mocker)
   await iotc.connect()
   assert iotc._hubCString == expectedHub
-  stopThreads(iotc)
+  await stopThreads(iotc)
 
 
 @pytest.mark.asyncio
 async def test_onproperties_before(mocker):
-
   iotc = init(mocker)
 
+  async def onProps(propname,propvalue):
+    assert propname == 'prop1'
+    assert propvalue == 40
+    await stopThreads(iotc)
+
+  mocker.patch.object(iotc,'sendProperty',return_value=True)
+  iotc.on(IOTCEvents.IOTC_PROPERTIES,onProps)
+  await iotc.connect()
+  try:
+    await iotc._propThread
+    await iotc._cmdThread
+  except asyncio.CancelledError:
+    pass
+ 
+
+
+@pytest.mark.asyncio
+async def test_onproperties_after(mocker):
+  iotc = init(mocker)
+  
   async def onProps(propname,propvalue):
     assert propname == 'prop1'
     assert propvalue == 40
@@ -114,64 +131,62 @@ async def test_onproperties_before(mocker):
     return True
 
   mocker.patch.object(iotc,'sendProperty',return_value=True)
-  iotc.on(IOTCEvents.IOTC_PROPERTIES,onProps)
   await iotc.connect()
- 
-
-
-@pytest.mark.asyncio
-async def test_onproperties_after(mocker):
-  mock_async=mock.Mock()
-  async def onProps(propname,propvalue):
-    return True
-
-  mock_async.return_value=await onProps('prop1',40)
-  
-  iotc = init(mocker)
-  mocker.patch.object(iotc,'sendProperty',return_value=True)
-  asyncio.run(iotc.connect())
   iotc.on(IOTCEvents.IOTC_PROPERTIES,onProps)
-    # give at least 10 seconds for the new listener to be recognized. assign the listener after connection is discouraged
-  time.sleep(11)
-  mock_async.assert_called_with('prop1',40)
-  stopThreads(iotc)
+
+  try:
+    await iotc._propThread
+  except asyncio.CancelledError:
+    pass
 
 
 
 @pytest.mark.asyncio
 async def test_onCommands_before(mocker):
 
-  onCmds=mock.Mock()
+  iotc = init(mocker)
 
-  def mockedAck():
-    print('Callback called')
+  async def onCmds(command,ack):
+    ret=ack()
+    assert ret=='mocked'
+    await stopThreads(iotc)
     return True
 
-  iotc = init(mocker)
+
+  def mockedAck():
+    return 'mocked'
+
   mocker.patch.object(iotc,'_cmdAck',mockedAck)
 
   iotc.on(IOTCEvents.IOTC_COMMAND,onCmds)
-  asyncio.run(iotc.connect())
-  onCmds.assert_called_with(methodRequest,mockedAck)
-  stopThreads(iotc)
+  await iotc.connect()
+  try:
+    await iotc._cmdThread
+  except asyncio.CancelledError:
+    pass
 
 @pytest.mark.asyncio
 async def test_onCommands_after(mocker):
 
-  onCmds=mock.Mock()
+  iotc = init(mocker)
 
-  def mockedAck():
-    print('Callback called')
+  async def onCmds(command,ack):
+    ret=ack()
+    assert ret=='mocked'
+    await stopThreads(iotc)
     return True
 
-  iotc = init(mocker)
+
+  def mockedAck():
+    return 'mocked'
+
   mocker.patch.object(iotc,'_cmdAck',mockedAck)
-  asyncio.run(iotc.connect())
+
+  await iotc.connect()
   iotc.on(IOTCEvents.IOTC_COMMAND,onCmds)
 
-  # give at least 10 seconds for the new listener to be recognized. assign the listener after connection is discouraged
-  time.sleep(11)
-  onCmds.assert_called_with(methodRequest,mockedAck)
-  stopThreads(iotc)
-
+  try:
+    await iotc._cmdThread
+  except asyncio.CancelledError:
+    pass
 
