@@ -6,7 +6,7 @@ from azure.iot.device.aio import ProvisioningDeviceClient
 from azure.iot.device import Message, MethodResponse
 from datetime import datetime
 
-__version__ = "0.2.0-beta.3"
+__version__ = "0.2.0-beta.4"
 __name__ = "azure-iotcentral-device-client"
 
 
