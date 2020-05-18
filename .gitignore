@@ -4,6 +4,8 @@ exp.py
 **/__pycache__
 *.pyc
 *.pyo
+.pypirc
+*.ini
 
 # VSCODE
 .vscode/

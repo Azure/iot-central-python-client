@@ -9,7 +9,7 @@ config.read(os.path.join(os.path.dirname(__file__),'samples.ini'))
 
 device_id = config['x509']['DeviceId']
 scope_id = config['x509']['ScopeId']
-key = {'certFile': config['x509']['CertFilePath'],'keyFile':config['x509']['KeyFilePath'],'certPhrase':config['x509']['CertPassphrasePath']}
+key = {'certFile': config['x509']['CertFilePath'],'keyFile':config['x509']['KeyFilePath'],'certPhrase':config['x509']['CertPassphrase']}
 
 # optional model Id for auto-provisioning
 try:

@@ -39,7 +39,7 @@
 
 ### 0.3.1
 
-- new `sendTelemetry` interface for system property support. see README
+- new `send_telemetry` interface for system property support. see README
 - update to 'SettingsUpdated' logic. Now individual setting values include '$version'
 - new 'setExitOnError' interface provides an option to enable exiting from app on mqtt layer issues.
 
