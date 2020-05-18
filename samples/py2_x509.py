@@ -1,18 +1,21 @@
-import sys
-sys.path.insert(0, '../src')
-
+import os
+import configparser
 import time
 from random import randint
 from azure.iotcentral.device.client import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
 
+config = configparser.ConfigParser()
+config.read(os.path.join(os.path.dirname(__file__),'samples.ini'))
 
-
-deviceId = "<DEVICE_ID>"
-scopeId = "<SCOPE_ID>"
-key = {'certFile':'<CERT_CHAIN_FILE_PATH>','keyFile':'<CERT_KEY_FILE_PATH>','certPhrase':'<CERT_PASSWORD>'}
+device_id = config['x509']['DeviceId']
+scope_id = config['x509']['ScopeId']
+key = {'certFile': config['x509']['CertFilePath'],'keyFile':config['x509']['KeyFilePath'],'certPhrase':config['x509']['CertPassphrasePath']}
 
 # optional model Id for auto-provisioning
-modelId= '<MODEL_ID>'
+try:
+    model_id = config['x509']['ModelId']
+except:
+    model_id = None
 
 
 def onProps(propName, propValue):
@@ -26,19 +29,19 @@ def onCommands(command, ack):
 
 
 # see iotc.Device documentation above for x509 argument sample
-iotc = IoTCClient(deviceId, scopeId,
+iotc = IoTCClient(device_id, scope_id,
                   IOTCConnectType.IOTC_CONNECT_X509_CERT, key)
-iotc.setModelId(modelId)
-iotc.setLogLevel(IOTCLogLevel.IOTC_LOGGING_ALL)
+iotc.set_model_id(model_id)
+iotc.set_log_level(IOTCLogLevel.IOTC_LOGGING_ALL)
 iotc.on(IOTCEvents.IOTC_PROPERTIES, onProps)
-# iotc.on(IOTCEvents.IOTC_COMMAND, onCommands)
+iotc.on(IOTCEvents.IOTC_COMMAND, onCommands)
 
 
 
 def main():
     iotc.connect()
-    while iotc.isConnected():
-        iotc.sendTelemetry({
+    while iotc.is_connected():
+        iotc.send_telemetry({
             'accelerometerX': str(randint(20, 45)),
             'accelerometerY': str(randint(20, 45)),
             "accelerometerZ": str(randint(20, 45))

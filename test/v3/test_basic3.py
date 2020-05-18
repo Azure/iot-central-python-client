@@ -1,9 +1,9 @@
-import sys
-sys.path.insert(0, 'src')
 import pytest
 import mock
 import time
 import asyncio
+import configparser
+import os
 
 from contextlib import suppress
 
@@ -12,12 +12,15 @@ from azure.iot.device.iothub.models import MethodRequest
 
 from azure.iotcentral.device.client.aio import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
 
-groupKey='68p6zEjwVNB6L/Dz8Wkz4VhaTrYqkndPrB0uJbWr2Hc/AmB+Qxz/eJJ9MIhLZFJ6hC0RmHMgfaYBkNTq84OCNQ=='
-deviceKey='Jdj7TBhH5RXCD+24bT5PTGf0NwdDbDvsI+rniK2AUHk='
-deviceId='nuovodev'
-scopeId='0ne00052362'
-assignedHub='iotc-632b1fc0-6e52-45d5-a37f-0daf6838f515.azure-devices.net'
-expectedHub='HostName=iotc-632b1fc0-6e52-45d5-a37f-0daf6838f515.azure-devices.net;DeviceId=nuovodev;SharedAccessKey=Jdj7TBhH5RXCD+24bT5PTGf0NwdDbDvsI+rniK2AUHk='
+config = configparser.ConfigParser()
+config.read(os.path.join(os.path.dirname(__file__),'../tests.ini'))
+
+groupKey=config['TESTS']['GroupKey']
+deviceKey=config['TESTS']['DeviceKey']
+device_id=config['TESTS']['DeviceId']
+scopeId=config['TESTS']['ScopeId']
+assignedHub=config['TESTS']['AssignedHub']
+expectedHub=config['TESTS']['ExpectedHub']
 
 propPayload={'prop1':{'value':40},'$version':5}
 
@@ -64,14 +67,14 @@ def async_return(result):
     return f
 
 
-async def stopThreads(iotc):
-  iotc._propThread.cancel()
-  iotc._cmdThread.cancel()
+async def stop_threads(iotc):
+  iotc._prop_thread.cancel()
+  iotc._cmd_thread.cancel()
   
   
 @pytest.mark.asyncio
 def init(mocker):
-  iotc=IoTCClient(deviceId, scopeId,
+  iotc=IoTCClient(device_id, scopeId,
                   IOTCConnectType.IOTC_CONNECT_SYMM_KEY, groupKey)
   mocker.patch('azure.iotcentral.device.client.aio.ProvisioningDeviceClient.create_from_symmetric_key',return_value=NewProvClient())
   mocker.patch('azure.iotcentral.device.client.aio.IoTHubDeviceClient.create_from_connection_string',return_value=NewDeviceClient())
@@ -82,22 +85,22 @@ def init(mocker):
 @pytest.mark.asyncio
 async def test_computeKey(mocker):
   iotc=init(mocker)
-  assert iotc._computeDerivedSymmetricKey(groupKey,deviceId) == deviceKey
+  assert iotc._compute_derived_symmetric_key(groupKey,device_id) == deviceKey
 
 @pytest.mark.asyncio
 async def test_deviceKeyGeneration(mocker):
   iotc = init(mocker)
   await iotc.connect()
-  assert iotc._keyORCert == deviceKey
-  await stopThreads(iotc)
+  assert iotc._key_or_cert == deviceKey
+  await stop_threads(iotc)
 
 
 @pytest.mark.asyncio
 async def test_hubConnectionString(mocker):
   iotc = init(mocker)
   await iotc.connect()
-  assert iotc._hubCString == expectedHub
-  await stopThreads(iotc)
+  assert iotc._hub_conn_string == expectedHub
+  await stop_threads(iotc)
 
 
 @pytest.mark.asyncio
@@ -107,14 +110,14 @@ async def test_onproperties_before(mocker):
   async def onProps(propname,propvalue):
     assert propname == 'prop1'
     assert propvalue == 40
-    await stopThreads(iotc)
+    await stop_threads(iotc)
 
-  mocker.patch.object(iotc,'sendProperty',return_value=True)
+  mocker.patch.object(iotc,'send_property',return_value=True)
   iotc.on(IOTCEvents.IOTC_PROPERTIES,onProps)
   await iotc.connect()
   try:
-    await iotc._propThread
-    await iotc._cmdThread
+    await iotc._prop_thread
+    await iotc._cmd_thread
   except asyncio.CancelledError:
     pass
  
@@ -127,41 +130,41 @@ async def test_onproperties_after(mocker):
   async def onProps(propname,propvalue):
     assert propname == 'prop1'
     assert propvalue == 40
-    await stopThreads(iotc)
+    await stop_threads(iotc)
     return True
 
-  mocker.patch.object(iotc,'sendProperty',return_value=True)
+  mocker.patch.object(iotc,'send_property',return_value=True)
   await iotc.connect()
   iotc.on(IOTCEvents.IOTC_PROPERTIES,onProps)
 
   try:
-    await iotc._propThread
+    await iotc._prop_thread
   except asyncio.CancelledError:
     pass
 
 
 
 @pytest.mark.asyncio
-async def test_onCommands_before(mocker):
+async def test_on_commands_before(mocker):
 
   iotc = init(mocker)
 
   async def onCmds(command,ack):
     ret=ack()
     assert ret=='mocked'
-    await stopThreads(iotc)
+    await stop_threads(iotc)
     return True
 
 
   def mockedAck():
     return 'mocked'
 
-  mocker.patch.object(iotc,'_cmdAck',mockedAck)
+  mocker.patch.object(iotc,'_cmd_ack',mockedAck)
 
   iotc.on(IOTCEvents.IOTC_COMMAND,onCmds)
   await iotc.connect()
   try:
-    await iotc._cmdThread
+    await iotc._cmd_thread
   except asyncio.CancelledError:
     pass
 
@@ -173,20 +176,20 @@ async def test_onCommands_after(mocker):
   async def onCmds(command,ack):
     ret=ack()
     assert ret=='mocked'
-    await stopThreads(iotc)
+    await stop_threads(iotc)
     return True
 
 
   def mockedAck():
     return 'mocked'
 
-  mocker.patch.object(iotc,'_cmdAck',mockedAck)
+  mocker.patch.object(iotc,'_cmd_ack',mockedAck)
 
   await iotc.connect()
   iotc.on(IOTCEvents.IOTC_COMMAND,onCmds)
 
   try:
-    await iotc._cmdThread
+    await iotc._cmd_thread
   except asyncio.CancelledError:
     pass
 

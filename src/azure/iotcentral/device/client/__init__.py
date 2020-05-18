@@ -10,7 +10,7 @@ from azure.iot.device import ProvisioningDeviceClient
 from azure.iot.device import Message, MethodResponse
 from datetime import datetime
 
-__version__ = "0.2.0-beta.4"
+__version__ = "0.2.0-beta.12"
 __name__ = "azure-iotcentral-device-client"
 
 
@@ -48,7 +48,7 @@ except ImportError:
     print("ERROR: missing dependency `micropython-uuid`")
     sys.exit()
 
-gIsMicroPython = ('implementation' in dir(sys)) and ('name' in dir(
+g_is_micro_python = ('implementation' in dir(sys)) and ('name' in dir(
     sys.implementation)) and (sys.implementation.name == 'micropython')
 
 
@@ -87,42 +87,42 @@ class IOTCEvents:
 
 
 class ConsoleLogger:
-    def __init__(self, logLevel):
-        self._logLevel = logLevel
+    def __init__(self, log_level):
+        self._log_level = log_level
 
     def _log(self, message):
         print(message)
 
     def info(self, message):
-        if self._logLevel != IOTCLogLevel.IOTC_LOGGING_DISABLED:
+        if self._log_level != IOTCLogLevel.IOTC_LOGGING_DISABLED:
             self._log(message)
 
     def debug(self, message):
-        if self._logLevel == IOTCLogLevel.IOTC_LOGGING_ALL:
+        if self._log_level == IOTCLogLevel.IOTC_LOGGING_ALL:
             self._log(message)
 
-    def setLogLevel(self, logLevel):
-        self._logLevel = logLevel
+    def set_log_level(self, log_level):
+        self._log_level = log_level
 
 
 class IoTCClient:
-    def __init__(self, deviceId, scopeId, credType, keyOrCert, logger=None):
-        self._deviceId = deviceId
-        self._scopeId = scopeId
-        self._credType = credType
-        self._keyORCert = keyOrCert
-        self._modelId = None
+    def __init__(self, device_id, scope_id, cred_type, key_or_cert, logger=None):
+        self._device_id = device_id
+        self._scope_id = scope_id
+        self._cred_type = cred_type
+        self._key_or_cert = key_or_cert
+        self._model_id = None
         self._connected = False
         self._events = {}
-        self._propThread = None
-        self._cmdThread = None
-        self._globalEndpoint = "global.azure-devices-provisioning.net"
+        self._prop_thread = None
+        self._cmd_thread = None
+        self._global_endpoint = "global.azure-devices-provisioning.net"
         if logger is None:
             self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
         else:
             self._logger = logger
 
-    def isConnected(self):
+    def is_connected(self):
         """
         Check if device is connected to IoTCentral
         :returns: Connection state
@@ -133,27 +133,26 @@ class IoTCClient:
         else:
             return False
 
-
-    def setGlobalEndpoint(self, endpoint):
+    def set_global_endpoint(self, endpoint):
         """
         Set the device provisioning endpoint.
         :param str endpoint: Custom device provisioning endpoint. Default ('global.azure-devices-provisioning.net')
         """
-        self._globalEndpoint = endpoint
+        self._global_endpoint = endpoint
 
-    def setModelId(self, modelId):
+    def set_model_id(self, model_id):
         """
         Set the model Id for the device to be associated
-        :param str modelId: Id for an existing model in the IoTCentral app
+        :param str model_id: Id for an existing model in the IoTCentral app
         """
-        self._modelId = modelId
+        self._model_id = model_id
 
-    def setLogLevel(self, logLevel):
+    def set_log_level(self, log_level):
         """
         Set the logging level
         :param IOTCLogLevel: Logging level. Available options are: ALL, API_ONLY, DISABLE
         """
-        self._logger.setLogLevel(logLevel)
+        self._logger.set_log_level(log_level)
 
     def on(self, eventname, callback):
         """
@@ -164,27 +163,28 @@ class IoTCClient:
         self._events[eventname] = callback
         return 0
 
-    def _onProperties(self):
+    def _on_properties(self):
         self._logger.debug('Setup properties listener')
         while True:
             try:
-                propCb = self._events[IOTCEvents.IOTC_PROPERTIES]
+                prop_cb = self._events[IOTCEvents.IOTC_PROPERTIES]
             except KeyError:
                 self._logger.debug('Properties callback not found')
                 time.sleep(10)
                 continue
-            
-            patch = self._deviceClient.receive_twin_desired_properties_patch()
-            self._logger.debug('\nReceived desired properties. {}\n'.format(patch))
-            
+
+            patch = self._device_client.receive_twin_desired_properties_patch()
+            self._logger.debug(
+                '\nReceived desired properties. {}\n'.format(patch))
+
             for prop in patch:
                 if prop == '$version':
                     continue
 
-                ret = propCb(prop, patch[prop]['value'])
+                ret = prop_cb(prop, patch[prop]['value'])
                 if ret:
                     self._logger.debug('Acknowledging {}'.format(prop))
-                    self.sendProperty({
+                    self.send_property({
                         '{}'.format(prop): {
                             "value": patch[prop]["value"],
                             'status': 'completed',
@@ -195,106 +195,103 @@ class IoTCClient:
                     self._logger.debug(
                         'Property "{}" unsuccessfully processed'.format(prop))
 
-    def _cmdAck(self,name, value, requestId):
-        self.sendProperty({
+    def _cmd_ack(self, name, value, request_id):
+        self.send_property({
             '{}'.format(name): {
                 'value': value,
-                'requestId': requestId
+                'requestId': request_id
             }
         })
-    
-    def _onCommands(self):
+
+    def _on_commands(self):
         self._logger.debug('Setup commands listener')
         while True:
             try:
-                cmdCb = self._events[IOTCEvents.IOTC_COMMAND]
+                cmd_cb = self._events[IOTCEvents.IOTC_COMMAND]
             except KeyError:
                 self._logger.debug('Commands callback not found')
                 time.sleep(10)
                 continue
             # Wait for unknown method calls
-            method_request = self._deviceClient.receive_method_request()
+            method_request = self._device_client.receive_method_request()
             self._logger.debug(
                 'Received command {}'.format(method_request.name))
-            self._deviceClient.send_method_response(MethodResponse.create_from_method_request(
+            self._device_client.send_method_response(MethodResponse.create_from_method_request(
                 method_request, 200, {
                     'result': True, 'data': 'Command received'}
             ))
-            cmdCb(method_request,self._cmdAck)
-            
+            cmd_cb(method_request, self._cmd_ack)
 
-    def _sendMessage(self, payload, properties, callback=None):
+    def _send_message(self, payload, properties):
         msg = Message(payload)
         msg.message_id = uuid.uuid4()
         if bool(properties):
             for prop in properties:
                 msg.custom_properties[prop] = properties[prop]
-        self._deviceClient.send_message(msg)
-        if callback is not None:
-            callback()
+        self._device_client.send_message(msg)
 
-    def sendProperty(self, payload, callback=None):
+    def send_property(self, payload):
         """
         Send a property message
         :param dict payload: The properties payload. Can contain multiple properties in the form {'<propName>':{'value':'<propValue>'}}
-        :param function callback: Function executed after successfull dispatch
         """
         self._logger.debug('Sending property {}'.format(json.dumps(payload)))
-        self._deviceClient.patch_twin_reported_properties(payload)
-        if callback is not None:
-            callback()
+        self._device_client.patch_twin_reported_properties(payload)
 
-    def sendTelemetry(self, payload, properties=None, callback=None):
+    def send_telemetry(self, payload, properties=None):
         """
         Send a telemetry message
         :param dict payload: The telemetry payload. Can contain multiple telemetry fields in the form {'<fieldName1>':<fieldValue1>,...,'<fieldNameN>':<fieldValueN>}
         :param dict optional properties: An object with custom properties to add to the message.
-        :param function callback: Function executed after successfull dispatch
         """
         self._logger.info('Sending telemetry message: {}'.format(payload))
-        self._sendMessage(json.dumps(payload), properties, callback)
+        self._send_message(json.dumps(payload), properties)
 
     def connect(self):
         """
         Connects the device.
         :raises exception: If connection fails
         """
-        if self._credType in (IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, IOTCConnectType.IOTC_CONNECT_SYMM_KEY):
-            if self._credType == IOTCConnectType.IOTC_CONNECT_SYMM_KEY:
-                self._keyORCert = self._computeDerivedSymmetricKey(
-                    self._keyORCert, self._deviceId)
-                self._logger.debug('Device key: {}'.format(self._keyORCert))
+        if self._cred_type in (IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, IOTCConnectType.IOTC_CONNECT_SYMM_KEY):
+            if self._cred_type == IOTCConnectType.IOTC_CONNECT_SYMM_KEY:
+                self._key_or_cert = self._compute_derived_symmetric_key(
+                    self._key_or_cert, self._device_id)
+                self._logger.debug('Device key: {}'.format(self._key_or_cert))
 
-            self._provisioningClient = ProvisioningDeviceClient.create_from_symmetric_key(
-                    self._globalEndpoint, self._deviceId, self._scopeId, self._keyORCert)
+            self._provisioning_client = ProvisioningDeviceClient.create_from_symmetric_key(
+                self._global_endpoint, self._device_id, self._scope_id, self._key_or_cert)
         else:
-            self._keyfile = self._keyORCert['keyFile']
-            self._certfile = self._keyORCert['certFile']
+            self._key_file = self._key_or_cert['key_file']
+            self._cert_file = self._key_or_cert['cert_file']
             try:
-                self._certPhrase=self._keyORCert['certPhrase']
-                x509=X509(self._certfile,self._keyfile,self._certPhrase)
+                self._cert_phrase = self._key_or_cert['cert_phrase']
+                x509 = X509(self._cert_file, self._key_file, self._cert_phrase)
             except:
-                self._logger.debug('No passphrase available for certificate. Trying without it')
-                x509=X509(self._certfile,self._keyfile)
+                self._logger.debug(
+                    'No passphrase available for certificate. Trying without it')
+                x509 = X509(self._cert_file, self._key_file)
             # Certificate provisioning
-            self._provisioningClient=ProvisioningDeviceClient.create_from_x509_certificate(provisioning_host=self._globalEndpoint,registration_id=self._deviceId,id_scope=self._scopeId,x509=x509)
+            self._provisioning_client = ProvisioningDeviceClient.create_from_x509_certificate(
+                provisioning_host=self._global_endpoint, registration_id=self._device_id, id_scope=self._scope_id, x509=x509)
 
-        if self._modelId:
-            self._provisioningClient.provisioning_payload = {
-                'iotcModelId': self._modelId}
+        if self._model_id:
+            self._provisioning_client.provisioning_payload = {
+                'iotcmodel_id': self._model_id}
         try:
-            registration_result = self._provisioningClient.register()
+            registration_result = self._provisioning_client.register()
             assigned_hub = registration_result.registration_state.assigned_hub
             self._logger.debug(assigned_hub)
-            self._hubCString = 'HostName={};DeviceId={};SharedAccessKey={}'.format(
-                assigned_hub, self._deviceId, self._keyORCert)
+            self._hub_conn_string = 'HostName={};DeviceId={};SharedAccessKey={}'.format(
+                assigned_hub, self._device_id, self._key_or_cert)
             self._logger.debug(
-                'IoTHub Connection string: {}'.format(self._hubCString))
+                'IoTHub Connection string: {}'.format(self._hub_conn_string))
 
-            if self._credType in (IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, IOTCConnectType.IOTC_CONNECT_SYMM_KEY):
-                self._deviceClient = IoTHubDeviceClient.create_from_connection_string(self._hubCString)
+            if self._cred_type in (IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, IOTCConnectType.IOTC_CONNECT_SYMM_KEY):
+                self._device_client = IoTHubDeviceClient.create_from_connection_string(
+                    self._hub_conn_string)
             else:
-                self._deviceClient = IoTHubDeviceClient.create_from_x509_certificate(x509=x509,hostname=assigned_hub,device_id=registration_result.registration_state.device_id)
+                self._device_client = IoTHubDeviceClient.create_from_x509_certificate(
+                    x509=x509, hostname=assigned_hub, device_id=registration_result.registration_state.device_id)
         except:
             t, v, tb = sys.exc_info()
             self._logger.info(
@@ -302,7 +299,7 @@ class IoTCClient:
             raise t(v)
         # Connect to iothub
         try:
-            self._deviceClient.connect()
+            self._device_client.connect()
             self._connected = True
             self._logger.debug('Device connected')
         except:
@@ -312,17 +309,17 @@ class IoTCClient:
 
         # setup listeners
 
-        self._propThread = threading.Thread(target=self._onProperties)
-        self._propThread.daemon = True
-        self._propThread.start()
+        self._prop_thread = threading.Thread(target=self._on_properties)
+        self._prop_thread.daemon = True
+        self._prop_thread.start()
 
-        self._cmdThread = threading.Thread(target=self._onCommands)
-        self._cmdThread.daemon = True
-        self._cmdThread.start()
+        self._cmd_thread = threading.Thread(target=self._on_commands)
+        self._cmd_thread.daemon = True
+        self._cmd_thread.start()
 
-    def _computeDerivedSymmetricKey(self, secret, regId):
+    def _compute_derived_symmetric_key(self, secret, reg_id):
         # pylint: disable=no-member
-        global gIsMicroPython
+        global g_is_micro_python
         try:
             secret = base64.b64decode(secret)
         except:
@@ -330,7 +327,7 @@ class IoTCClient:
                 "ERROR: broken base64 secret => `" + secret + "`")
             sys.exit()
 
-        if gIsMicroPython == False:
-            return base64.b64encode(hmac.new(secret, msg=regId.encode('utf8'), digestmod=hashlib.sha256).digest()).decode('utf-8')
+        if g_is_micro_python == False:
+            return base64.b64encode(hmac.new(secret, msg=reg_id.encode('utf8'), digestmod=hashlib.sha256).digest()).decode('utf-8')
         else:
-            return base64.b64encode(hmac.new(secret, msg=regId.encode('utf8'), digestmod=hashlib._sha256.sha256).digest())
+            return base64.b64encode(hmac.new(secret, msg=reg_id.encode('utf8'), digestmod=hashlib._sha256.sha256).digest())

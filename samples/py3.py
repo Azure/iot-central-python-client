@@ -1,48 +1,53 @@
-import sys
-sys.path.insert(0, '../src')
-
+import os
 import asyncio
-from random import randint
+import configparser
 from azure.iotcentral.device.client.aio import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
+from random import randint
 
+config = configparser.ConfigParser()
+config.read(os.path.join(os.path.dirname(__file__),'samples.ini'))
 
-
-deviceId = "<DEVICE_ID>"
-scopeId = "<SCOPE_ID>"
-key = '<DEVICE_OR_GROUP_KEY>'
+device_id = config['SymmetricKey']['DeviceId']
+scope_id = config['SymmetricKey']['ScopeId']
+key = config['SymmetricKey']['Key']
 
 # optional model Id for auto-provisioning
-modelId= '<TEMPLATE_ID>'
+try:
+    model_id = config['SymmetricKey']['ModelId']
+except:
+    model_id = None
 
 
-async def onProps(propName, propValue):
+async def on_props(propName, propValue):
     print(propValue)
     return True
 
 
-async def onCommands(command, ack):
+async def on_commands(command, ack):
     print(command.name)
     await ack(command.name, 'Command received', command.request_id)
 
 
 # change connect type to reflect the used key (device or group)
-iotc = IoTCClient(deviceId, scopeId,
-                  IOTCConnectType.IOTC_CONNECT_SYMM_KEY, key)
-iotc.setModelId(modelId)
-iotc.setLogLevel(IOTCLogLevel.IOTC_LOGGING_ALL)
-iotc.on(IOTCEvents.IOTC_PROPERTIES, onProps)
-iotc.on(IOTCEvents.IOTC_COMMAND, onCommands)
+iotc = IoTCClient(device_id, scope_id,
+                  IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, key)
+if model_id != None:
+    iotc.set_model_id(model_id)
+
+iotc.set_log_level(IOTCLogLevel.IOTC_LOGGING_ALL)
+iotc.on(IOTCEvents.IOTC_PROPERTIES, on_props)
+iotc.on(IOTCEvents.IOTC_COMMAND, on_commands)
 
 # iotc.setQosLevel(IOTQosLevel.IOTC_QOS_AT_MOST_ONCE)
 
 
 async def main():
     await iotc.connect()
-    while iotc.isConnected():
-        await iotc.sendTelemetry({
-            'accelerometerX': str(randint(20, 45)),
-            'accelerometerY': str(randint(20, 45)),
-            "accelerometerZ": str(randint(20, 45))
+    while iotc.is_connected():
+        await iotc.send_telemetry({
+            't777b192a': str(randint(20, 45)),
+            'h6941c57b': str(randint(20, 45)),
+            "b2fba1eb1": str(randint(20, 45))
         })
         await asyncio.sleep(3)
 
