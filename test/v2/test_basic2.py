@@ -3,14 +3,19 @@ import mock
 import time
 import configparser
 import os
+import sys
+
 
 from azure.iot.device.provisioning.models import RegistrationResult
 from azure.iot.device.iothub.models import MethodRequest
 
-from azure.iotcentral.device.client import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
-
 config = configparser.ConfigParser()
-config.read(os.path.join(os.path.dirname(__file__),'../tests.ini'))
+config.read(os.path.join(os.path.dirname(__file__), '../tests.ini'))
+
+if config['TESTS'].getboolean('Local'):
+    sys.path.insert(0, 'src')
+
+from iotc import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
 
 groupKey = config['TESTS']['GroupKey']
 deviceKey = config['TESTS']['DeviceKey']
@@ -66,7 +71,6 @@ def init(mocker):
     mocker.patch('azure.iotcentral.device.client.IoTHubDeviceClient.create_from_connection_string',
                  return_value=NewDeviceClient())
     return iotc
-
 
 
 def test_computeKey(mocker):

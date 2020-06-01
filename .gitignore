@@ -11,6 +11,6 @@ exp.py
 .vscode/
 
 # publish
-azure_iotcentral_device_client.egg-info
+*.egg-info
 build
 dist

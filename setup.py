@@ -2,7 +2,7 @@ import setuptools
 import sys
 
 sys.path.insert(0, 'src')
-from azure.iotcentral.device.client import __version__, __name__
+from iotc import __version__, __name__
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -30,5 +30,5 @@ setuptools.setup(
       'Programming Language :: Python :: 3.8',
     ],
     include_package_data=True,
-    install_requires=["azure-iot-device"]
+    install_requires=["azure-iot-device","uuid","hmac","hashlib","base64","json"]
 )

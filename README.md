@@ -23,13 +23,20 @@ These clients are available with an asynchronous API, as well as a blocking sync
 ## Samples
 Check out the [sample repository](samples) for example code showing how the SDK can be used in the various scenarios:
 
-*   Sending telemetry and receiving properties and commands with device connected through symmetric key (Python 2.7+)
+*   [py3](samples/py3.py) - Sending telemetry and receiving properties and commands with device connected through **symmetric key** (Python 3.7+)
+*   [py3_x509](samples/py3_x509.py) - Sending telemetry and receiving properties and commands with device connected through **x509 certificates** (Python 3.7+)
+*   [py3_file_logger](samples/py3_file_logger.py) - Print logs on file with rotation (Python 3.7+)
+*   [py3_eventhub_logger](samples/py3_eventhub_logger.py) - Redirect logs to Azure Event Hub (Python 3.7+)
 
-*   Sending telemetry and receiving properties and commands with device connected through symmetric key (Python 3.7+)
-*   Sending telemetry and receiving properties and commands with device connected through x509 certificates (Python 2.7+)
-*   Sending telemetry and receiving properties and commands with device connected through x509 certificates (Python 3.7+)
 
-Samples by default parse a configuration file including required credentials. Just create a file called **samples.ini** inside the _samples_ folder with this content:
+**The following samples are legacy samples**, they use the sycnhronous API intended for use with Python 2.7, or in compatibility scenarios with later versions. We recommend you use the asynchronous API and Python3 samples above instead.
+
+
+*   [py2](samples/py2.py) - Sending telemetry and receiving properties and commands with device connected through **symmetric key** (Python 2.7+)
+*   [py2_x509](samples/py2_x509.py) - Sending telemetry and receiving properties and commands with device connected through **x509 certificates** (Python 2.7+)
+
+
+Samples by default parse a configuration file including required credentials. Just create a file called **samples.ini** inside the _samples_ folder with a content like this:
 
 ```ini
 [SymmetricKey]
@@ -45,6 +52,14 @@ KeyFilePath = path_to_key_file
 CertPassphrase = optional password
 ```
 The configuration file can include one of the sections or both. Section names must match references in the sample file.
+
+### Run samples with local changes
+It is possible to run samples against the local copy of the device client. This is particularly useful when testing patches not yet published upstream.
+Just add an entry to **samples.ini** in the _DEFAULT_ section:
+```ini
+[DEFAULT]
+Local = yes
+```
 
 ## Importing the module
 Sync client (Python 2.7+ and 3.7+) can be imported in this way:
@@ -98,12 +113,33 @@ await iotc.connect()
 ```
 After successfull connection, IOTC context is available for further commands.
 
+### Reconnection
+The device client automatically handle reconnection in case of network failures or disconnections. However if process runs for long time (e.g. unmonitored devices) a reconnection might fail because of credentials expiration. 
+
+To control reconnection and reset credentials the function _is_connected()_ is available and can be used to test connection status inside a loop or before running operations.
+
+e.g.
+```py
+retry = 0 # stop reconnection attempts 
+while true:
+    if iotc.is_connected():
+        # do something
+    else
+        if retry == 10:
+            sys.exit("error")
+        retry += 1
+        iotc.connect()
+```
+
+
+
+## Operations
 
 ### Send telemetry
 
 e.g. Send telemetry every 3 seconds
 ```py
-while iotc.isConnected():
+while iotc.is_connected():
         await iotc.send_telemetry({
             'accelerometerX': str(randint(20, 45)),
             'accelerometerY': str(randint(20, 45)),
@@ -116,11 +152,11 @@ Properties can be custom or part of the reserved ones (see list [here](https://g
 
 ### Send property update
 ```py
-iotc.sendProperty({'fieldName':'fieldValue'});
+iotc.sendProperty({'fieldName':'fieldValue'})
 ```
 ### Listen to properties update
 ```py
-iotc.on(IOTCEvents.IOTC_PROPERTIES, callback);
+iotc.on(IOTCEvents.IOTC_PROPERTIES, callback)
 ```
 To provide setting sync aknowledgement, the callback must reply **True** if the new value has been applied or **False** otherwise
 ```py
@@ -128,7 +164,7 @@ async def onProps(propName, propValue):
     print(propValue)
     return True
 
-iotc.on(IOTCEvents.IOTC_PROPERTIES, onProps);
+iotc.on(IOTCEvents.IOTC_PROPERTIES, onProps)
 ```
 
 ### Listen to commands
@@ -143,6 +179,23 @@ async def onCommands(command, ack):
     print(command.name)
     await ack(command.name, 'Command received', command.request_id)
 ```
+
+## Logging
+
+The default log prints to console operations status and errors.
+This is the _IOTC_LOGGING_API_ONLY_ logging level.
+The function set_log_level() can be used to change options or disable logs. It accepts a _IOTCLogLevel_ value among the following:
+
+-  IOTC_LOGGING_DISABLED (log disabled)
+-  IOTC_LOGGING_API_ONLY (information and errors, default)
+-  IOTC_LOGGING_ALL (all messages, debug and underlying errors)
+
+The device client also accepts an optional Logger instance to redirect logs to other targets than console.
+The custom class must implement three methods:
+
+- info(message)
+- debug(message)
+- set_log_level(message);
 
 ## One-touch device provisioning and approval
 A device can send custom data during provision process: if a device is aware of its IoT Central template Id, then it can be automatically provisioned.

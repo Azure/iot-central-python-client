@@ -1,11 +1,18 @@
 import os
 import asyncio
 import configparser
-from azure.iotcentral.device.client.aio import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
+import sys
+
 from random import randint
 
 config = configparser.ConfigParser()
 config.read(os.path.join(os.path.dirname(__file__),'samples.ini'))
+
+if config['DEFAULT'].getboolean('Local'):
+    sys.path.insert(0, 'src')
+
+from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents
+from iotc.aio import IoTCClient
 
 device_id = config['SymmetricKey']['DeviceId']
 scope_id = config['SymmetricKey']['ScopeId']

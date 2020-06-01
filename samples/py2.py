@@ -1,9 +1,8 @@
+import sys
 import os
 import configparser
 import time
 from random import randint
-from azure.iotcentral.device.client import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
-
 
 
 config = configparser.ConfigParser()
@@ -12,6 +11,12 @@ config.read(os.path.join(os.path.dirname(__file__),'samples.ini'))
 device_id = config['SymmetricKey']['DeviceId']
 scope_id = config['SymmetricKey']['ScopeId']
 key = config['SymmetricKey']['Key']
+
+
+if config['DEFAULT'].getboolean('Local'):
+    sys.path.insert(0, 'src')
+
+from iotc import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
 
 # optional model Id for auto-provisioning
 try:

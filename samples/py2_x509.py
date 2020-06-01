@@ -1,8 +1,9 @@
+import sys
 import os
 import configparser
 import time
 from random import randint
-from azure.iotcentral.device.client import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
+
 
 config = configparser.ConfigParser()
 config.read(os.path.join(os.path.dirname(__file__),'samples.ini'))
@@ -10,6 +11,11 @@ config.read(os.path.join(os.path.dirname(__file__),'samples.ini'))
 device_id = config['x509']['DeviceId']
 scope_id = config['x509']['ScopeId']
 key = {'certFile': config['x509']['CertFilePath'],'keyFile':config['x509']['KeyFilePath'],'certPhrase':config['x509']['CertPassphrase']}
+
+if config['DEFAULT'].getboolean('Local'):
+    sys.path.insert(0, 'src')
+
+from iotc import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
 
 # optional model Id for auto-provisioning
 try:

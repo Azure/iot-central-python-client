@@ -1,5 +1,3 @@
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
-
 
 import sys
 import threading
@@ -10,53 +8,49 @@ from azure.iot.device import ProvisioningDeviceClient
 from azure.iot.device import Message, MethodResponse
 from datetime import datetime
 
-__version__ = "0.2.0-beta.12"
-__name__ = "azure-iotcentral-device-client"
+try:
+    import hmac
+except ImportError:
+    print("ERROR: missing dependency `hmac`")
+    sys.exit()
+
+try:
+    import hashlib
+except ImportError:
+    print("ERROR: missing dependency `hashlib`")
+    sys.exit()
+
+try:
+    import base64
+except ImportError:
+    print("ERROR: missing dependency `base64`")
+    sys.exit()
+
+try:
+    import json
+except ImportError:
+    print("ERROR: missing dependency `json`")
+    sys.exit()
+
+try:
+    import uuid
+except ImportError:
+    print("ERROR: missing dependency `uuid`")
+    sys.exit()
+
+
+__version__ = "0.2.1-beta.2"
+__name__ = "iotc"
 
 
 def version():
     print(__version__)
 
 
-try:
-    import hmac
-except ImportError:
-    print("ERROR: missing dependency `micropython-hmac`")
-    sys.exit()
-
-try:
-    import hashlib
-except ImportError:
-    print("ERROR: missing dependency `micropython-hashlib`")
-    sys.exit()
-
-try:
-    import base64
-except ImportError:
-    print("ERROR: missing dependency `micropython-base64`")
-    sys.exit()
-
-try:
-    import json
-except ImportError:
-    print("ERROR: missing dependency `micropython-json`")
-    sys.exit()
-
-try:
-    import uuid
-except ImportError:
-    print("ERROR: missing dependency `micropython-uuid`")
-    sys.exit()
-
-g_is_micro_python = ('implementation' in dir(sys)) and ('name' in dir(
-    sys.implementation)) and (sys.implementation.name == 'micropython')
-
-
 class IOTCConnectType:
     IOTC_CONNECT_SYMM_KEY = 1
     IOTC_CONNECT_X509_CERT = 2
     IOTC_CONNECT_DEVICE_KEY = 3
-
 
 
 class IOTCLogLevel:
@@ -112,7 +106,6 @@ class IoTCClient:
         self._cred_type = cred_type
         self._key_or_cert = key_or_cert
         self._model_id = None
-        self._connected = False
         self._events = {}
         self._prop_thread = None
         self._cmd_thread = None
@@ -120,7 +113,12 @@ class IoTCClient:
         if logger is None:
             self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
         else:
-            self._logger = logger
+            if hasattr(logger, "info") & hasattr(logger, "debug") & hasattr(logger, "set_log_level"):
+                self._logger = logger
+            else:
+                print("ERROR: Logger object has unsupported format. It must implement the following functions\n\
+                    info(message);\ndebug(message);\nset_log_level(message);")
+                sys.exit()
 
     def is_connected(self):
         """
@@ -128,10 +126,10 @@ class IoTCClient:
         :returns: Connection state
         :rtype: bool
         """
-        if self._connected:
-            return True
+        if not self._device_client:
+            print("ERROR: A connection was never attempted. You need to first call connect() before querying the connection state")
         else:
-            return False
+            return self._device_client.connected
 
     def set_global_endpoint(self, endpoint):
         """
@@ -300,7 +298,6 @@ class IoTCClient:
         # Connect to iothub
         try:
             self._device_client.connect()
-            self._connected = True
             self._logger.debug('Device connected')
         except:
             t, v, tb = sys.exc_info()
@@ -319,7 +316,6 @@ class IoTCClient:
 
     def _compute_derived_symmetric_key(self, secret, reg_id):
         # pylint: disable=no-member
-        global g_is_micro_python
         try:
             secret = base64.b64decode(secret)
         except:
@@ -327,7 +323,4 @@ class IoTCClient:
                 "ERROR: broken base64 secret => `" + secret + "`")
             sys.exit()
 
-        if g_is_micro_python == False:
-            return base64.b64encode(hmac.new(secret, msg=reg_id.encode('utf8'), digestmod=hashlib.sha256).digest()).decode('utf-8')
-        else:
-            return base64.b64encode(hmac.new(secret, msg=reg_id.encode('utf8'), digestmod=hashlib._sha256.sha256).digest())
+        return base64.b64encode(hmac.new(secret, msg=reg_id.encode('utf8'), digestmod=hashlib.sha256).digest()).decode('utf-8')
