@@ -73,7 +73,7 @@ class IoTCClient:
         if logger is None:
             self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
         else:
-            if hasattr(logger,"info") & hasattr(logger,"debug") & hasattr(logger,"set_log_level"):
+            if hasattr(logger,"info") and hasattr(logger,"debug") and hasattr(logger,"set_log_level"):
                 self._logger = logger
             else:
                 print("ERROR: Logger object has unsupported format. It must implement the following functions\n\
