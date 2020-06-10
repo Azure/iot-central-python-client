@@ -37,7 +37,7 @@ Check out the [sample repository](samples) for example code showing how the SDK 
 *   [py3_eventhub_logger](samples/py3_eventhub_logger.py) - Redirect logs to Azure Event Hub (Python 3.7+)
 
 
-**The following samples are legacy samples**, they use the sycnhronous API intended for use with Python 2.7, or in compatibility scenarios with later versions. We recommend you use the asynchronous API and Python3 samples above instead.
+**The following samples are legacy samples**, they work with the sycnhronous API intended for use with Python 2.7, or in compatibility scenarios with later versions. We recommend you use the asynchronous API and Python3 samples above instead.
 
 
 *   [py2](samples/py2.py) - Sending telemetry and receiving properties and commands with device connected through **symmetric key** (Python 2.7+)
@@ -229,3 +229,6 @@ To change default behavior, administrator can enable device auto-approval from D
 With automatic approval a device can be provisioned without any manual action and can start sending/receiving data after status changes to "Provisioned"
 
 ![Img](assets/auto_approval.jpg)
+
+## License
+This samples is licensed with the MIT license. For more information, see [LICENSE](./LICENSE)
