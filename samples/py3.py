@@ -36,22 +36,22 @@ async def on_commands(command, ack):
 
 
 # change connect type to reflect the used key (device or group)
-iotc = IoTCClient(device_id, scope_id,
+client = IoTCClient(device_id, scope_id,
                   IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, key)
 if model_id != None:
-    iotc.set_model_id(model_id)
+    client.set_model_id(model_id)
 
-iotc.set_log_level(IOTCLogLevel.IOTC_LOGGING_ALL)
-iotc.on(IOTCEvents.IOTC_PROPERTIES, on_props)
-iotc.on(IOTCEvents.IOTC_COMMAND, on_commands)
+client.set_log_level(IOTCLogLevel.IOTC_LOGGING_ALL)
+client.on(IOTCEvents.IOTC_PROPERTIES, on_props)
+client.on(IOTCEvents.IOTC_COMMAND, on_commands)
 
 # iotc.setQosLevel(IOTQosLevel.IOTC_QOS_AT_MOST_ONCE)
 
 
 async def main():
-    await iotc.connect()
-    while iotc.is_connected():
-        await iotc.send_telemetry({
+    await client.connect()
+    while client.is_connected():
+        await client.send_telemetry({
             't777b192a': str(randint(20, 45)),
             'h6941c57b': str(randint(20, 45)),
             "b2fba1eb1": str(randint(20, 45))

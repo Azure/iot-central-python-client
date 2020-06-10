@@ -6,7 +6,6 @@ import os
 import sys
 
 
-from azure.iot.device.provisioning.models import RegistrationResult
 from azure.iot.device.iothub.models import MethodRequest
 
 config = configparser.ConfigParser()
@@ -17,12 +16,36 @@ if config['TESTS'].getboolean('Local'):
 
 from iotc import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
 
-groupKey = config['TESTS']['GroupKey']
-deviceKey = config['TESTS']['DeviceKey']
-device_id = config['TESTS']['DeviceId']
-scopeId = config['TESTS']['ScopeId']
-assignedHub = config['TESTS']['AssignedHub']
-expectedHub = config['TESTS']['ExpectedHub']
+try:
+    groupKey = config['TESTS']['GroupKey']
+except:
+    groupKey='groupKey'
+
+try:
+    deviceKey = config['TESTS']['DeviceKey']
+except:
+    deviceKey='kPufjjN/EMoyKcNiAXvlTz8H61mlhSnmvoF6dxhnysA='
+
+try:
+    device_id = config['TESTS']['DeviceId']
+except:
+    device_id='device_id'
+
+try:
+    scopeId = config['TESTS']['ScopeId']
+except:
+    scopeId='scopeId'
+
+try:
+    assignedHub = config['TESTS']['AssignedHub']
+except:
+    assignedHub='assignedHub'
+
+try:
+    expectedHub = config['TESTS']['ExpectedHub']
+except:
+    expectedHub='HostName=assignedHub;DeviceId=device_id;SharedAccessKey=kPufjjN/EMoyKcNiAXvlTz8H61mlhSnmvoF6dxhnysA='
+
 
 propPayload = {'prop1': {'value': 40}, '$version': 5}
 
@@ -34,16 +57,26 @@ methodRequest = MethodRequest(cmdRequestId, cmdName, cmdPayload)
 
 class NewRegState():
     def __init__(self):
-        self.assigned_hub = assignedHub
+        self._assigned_hub = assignedHub
 
-    def assigned_hub(self):
-        return self.assigned_hub
+    def get_assigned_hub(self):
+        return self._assigned_hub
+    
+    assigned_hub=property(get_assigned_hub)
+
+class NewRegResult():
+    def __init__(self):
+        self._registration_state=NewRegState()
+    
+    def get_registration_state(self):
+        return self._registration_state
+
+    registration_state=property(get_registration_state)
 
 
 class NewProvClient():
     def register(self):
-        reg = RegistrationResult('3o375i827i852', 'assigned', NewRegState())
-        return reg
+        return NewRegResult()
 
 
 class NewDeviceClient():
@@ -64,50 +97,50 @@ class NewDeviceClient():
 
 
 def init(mocker):
-    iotc = IoTCClient(device_id, scopeId,
+    client = IoTCClient(device_id, scopeId,
                       IOTCConnectType.IOTC_CONNECT_SYMM_KEY, groupKey)
-    mocker.patch('azure.iotcentral.device.client.ProvisioningDeviceClient.create_from_symmetric_key',
+    mocker.patch('iotc.ProvisioningDeviceClient.create_from_symmetric_key',
                  return_value=NewProvClient())
-    mocker.patch('azure.iotcentral.device.client.IoTHubDeviceClient.create_from_connection_string',
+    mocker.patch('iotc.IoTHubDeviceClient.create_from_connection_string',
                  return_value=NewDeviceClient())
-    return iotc
+    return client
 
 
 def test_computeKey(mocker):
-    iotc = init(mocker)
-    assert iotc._compute_derived_symmetric_key(
-        groupKey, device_id) == deviceKey
+    client = init(mocker)
+    assert client._compute_derived_symmetric_key(
+        groupKey, device_id) == 'deviceKey'
 
 
 def test_deviceKeyGeneration(mocker):
-    iotc = init(mocker)
-    iotc.connect()
-    assert iotc._key_or_cert == deviceKey
+    client = init(mocker)
+    client.connect()
+    assert client._key_or_cert == deviceKey
 
 
 def test_hubConnectionString(mocker):
-    iotc = init(mocker)
-    iotc.connect()
-    assert iotc._hub_conn_string == expectedHub
+    client = init(mocker)
+    client.connect()
+    assert client._hub_conn_string == expectedHub
 
 
 def test_onproperties_before(mocker):
     on_props = mock.Mock()
 
-    iotc = init(mocker)
-    mocker.patch.object(iotc, 'send_property', mock.Mock())
-    iotc.on(IOTCEvents.IOTC_PROPERTIES, on_props)
-    iotc.connect()
+    client = init(mocker)
+    mocker.patch.object(client, 'send_property', mock.Mock())
+    client.on(IOTCEvents.IOTC_PROPERTIES, on_props)
+    client.connect()
     on_props.assert_called_with('prop1', 40)
 
 
 def test_onproperties_after(mocker):
     on_props = mock.Mock()
 
-    iotc = init(mocker)
-    mocker.patch.object(iotc, 'send_property', mock.Mock())
-    iotc.connect()
-    iotc.on(IOTCEvents.IOTC_PROPERTIES, on_props)
+    client = init(mocker)
+    mocker.patch.object(client, 'send_property', mock.Mock())
+    client.connect()
+    client.on(IOTCEvents.IOTC_PROPERTIES, on_props)
     # give at least 10 seconds for the new listener to be recognized. assign the listener after connection is discouraged
     time.sleep(11)
     on_props.assert_called_with('prop1', 40)
@@ -121,11 +154,11 @@ def test_onCommands_before(mocker):
         print('Callback called')
         return True
 
-    iotc = init(mocker)
-    mocker.patch.object(iotc, '_cmd_ack', mockedAck)
+    client = init(mocker)
+    mocker.patch.object(client, '_cmd_ack', mockedAck)
 
-    iotc.on(IOTCEvents.IOTC_COMMAND, on_cmds)
-    iotc.connect()
+    client.on(IOTCEvents.IOTC_COMMAND, on_cmds)
+    client.connect()
     on_cmds.assert_called_with(methodRequest, mockedAck)
 
 
@@ -137,11 +170,11 @@ def test_onCommands_after(mocker):
         print('Callback called')
         return True
 
-    iotc = init(mocker)
-    mocker.patch.object(iotc, '_cmd_ack', mockedAck)
+    client = init(mocker)
+    mocker.patch.object(client, '_cmd_ack', mockedAck)
 
-    iotc.connect()
-    iotc.on(IOTCEvents.IOTC_COMMAND, on_cmds)
+    client.connect()
+    client.on(IOTCEvents.IOTC_COMMAND, on_cmds)
 
     # give at least 10 seconds for the new listener to be recognized. assign the listener after connection is discouraged
     time.sleep(11)

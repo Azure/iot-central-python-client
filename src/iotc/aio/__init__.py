@@ -35,7 +35,7 @@ except ImportError:
     sys.exit()
 
 
-__version__ = "0.2.1-beta.2"
+__version__ = "0.2.2-beta.1"
 __name__ = "iotc"
 
 class ConsoleLogger:

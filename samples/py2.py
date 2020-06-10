@@ -34,22 +34,22 @@ def on_commands(command, ack):
     ack(command.name, 'Command received', command.request_id)
 
 
-# see iotc.Device documentation above for x509 argument sample
-iotc = IoTCClient(device_id, scope_id,
+# see client.Device documentation above for x509 argument sample
+client = IoTCClient(device_id, scope_id,
                   IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, key)
 if model_id != None:
-    iotc.set_model_id(model_id)
+    client.set_model_id(model_id)
 
-iotc.set_log_level(IOTCLogLevel.IOTC_LOGGING_ALL)
-iotc.on(IOTCEvents.IOTC_PROPERTIES, on_props)
-iotc.on(IOTCEvents.IOTC_COMMAND, on_commands)
+client.set_log_level(IOTCLogLevel.IOTC_LOGGING_ALL)
+client.on(IOTCEvents.IOTC_PROPERTIES, on_props)
+client.on(IOTCEvents.IOTC_COMMAND, on_commands)
 
 
 
 def main():
-    iotc.connect()
-    while iotc.is_connected():
-        iotc.send_telemetry({
+    client.connect()
+    while client.is_connected():
+        client.send_telemetry({
             'accelerometerX': str(randint(20, 45)),
             'accelerometerY': str(randint(20, 45)),
             "accelerometerZ": str(randint(20, 45))

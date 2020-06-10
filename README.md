@@ -2,15 +2,23 @@
 
 [![Join the chat at https://gitter.im/iotdisc/community](https://badges.gitter.im/iotdisc.svg)](https://gitter.im/iotdisc/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Licensed under the MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/lucadruda/iotc-python-device-client/blob/master/LICENSE)
+[![PyPI version](https://badge.fury.io/py/iotc.svg)](https://badge.fury.io/py/iotc)
 
+### An Azure IoT Central device client library written in Python.
+This repository contains code for the Azure IoT Central SDK for Python. This enables python developers to easily create device solutions that semealessly connect to Azure IoT Central applications.
+It hides some of the complexities of the official Azure IoT SDK and uses IoT Central naming conventions.
+
+### Disclaimer
+> __This library is experimental and has the purpose of providing an easy to use solution for prototyping and small projects. Although stable and actively maintained, its use in production is discouraged.
+Please refer to official [Azure IoT Python SDK](https://github.com/Azure/azure-iot-sdk-python) when building production products.__
 
 ## Prerequisites
 + Python 2.7+ or Python 3.7+ (recommended)
 
-## Installing `azure-iotcentral-device-client`
+## Installing `iotc`
 
 ```
-pip install azure-iotcentral-device-client
+pip install iotc
 ```
 These clients are available with an asynchronous API, as well as a blocking synchronous API for compatibility scenarios. **We recommend you use Python 3.7+ and the asynchronous API.**
 
@@ -65,12 +73,12 @@ Local = yes
 Sync client (Python 2.7+ and 3.7+) can be imported in this way:
 
 ```py
-from azure.iotcentral.device.client import IoTCClient
+from iotc import IoTCClient
 ```
 Async client (with asyncio for Python 3.7+ only) can be imported like this:
 
 ```py
-from azure.iotcentral.device.client.aio import IoTCClient
+from iotc.aio import IoTCClient
 ```
 
 ## Connecting
