@@ -5,7 +5,7 @@ import sys
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-version = "1.0.0"
+version = "1.0.1"
 
 setuptools.setup(
     name='iotc',
