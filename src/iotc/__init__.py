@@ -114,6 +114,7 @@ class IoTCClient:
         self._events = {}
         self._prop_thread = None
         self._cmd_thread = None
+        self._enqueued_cmd_thread = None
         self._global_endpoint = "global.azure-devices-provisioning.net"
         if logger is None:
             self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
@@ -225,6 +226,22 @@ class IoTCClient:
             ))
             cmd_cb(method_request, self._cmd_ack)
 
+    def _on_enqueued_commands(self):
+        self._logger.debug('Setup enqueued commands listener')
+        while True:
+            try:
+                enqueued_cmd_cb = self._events[IOTCEvents.IOTC_ENQUEUED_COMMAND]
+            except KeyError:
+                self._logger.debug('Enqueued commands callback not found')
+                time.sleep(10)
+                continue
+            # Wait for unknown method calls
+            c2d = self._device_client.receive_message()
+            c2d_name=c2d.custom_properties['method-name'].split(':')[1]
+            self._logger.debug(
+                'Received enqueued command {}'.format(c2d_name))
+            enqueued_cmd_cb(c2d_name,c2d.data)
+
     def _send_message(self, payload, properties):
         msg = Message(payload)
         msg.message_id = uuid.uuid4()
@@ -318,6 +335,10 @@ class IoTCClient:
         self._cmd_thread = threading.Thread(target=self._on_commands)
         self._cmd_thread.daemon = True
         self._cmd_thread.start()
+
+        self._enqueued_cmd_thread = threading.Thread(target=self._on_enqueued_commands)
+        self._enqueued_cmd_thread.daemon = True
+        self._enqueued_cmd_thread.start()
 
     def _compute_derived_symmetric_key(self, secret, reg_id):
         # pylint: disable=no-member
