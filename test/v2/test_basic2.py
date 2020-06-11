@@ -109,7 +109,7 @@ def init(mocker):
 def test_computeKey(mocker):
     client = init(mocker)
     assert client._compute_derived_symmetric_key(
-        groupKey, device_id) == 'deviceKey'
+        groupKey, device_id) == deviceKey
 
 
 def test_deviceKeyGeneration(mocker):
