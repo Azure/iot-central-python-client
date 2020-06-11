@@ -8,19 +8,20 @@ from random import randint
 config = configparser.ConfigParser()
 config.read(os.path.join(os.path.dirname(__file__),'samples.ini'))
 
-device_id = config['SymmetricKey']['DeviceId']
-scope_id = config['SymmetricKey']['ScopeId']
-key = config['SymmetricKey']['Key']
-
 
 if config['DEFAULT'].getboolean('Local'):
     sys.path.insert(0, 'src')
 
 from iotc import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
 
+# Change config section name to reflect sample.ini
+device_id = config['DEVICE_A']['DeviceId']
+scope_id = config['DEVICE_A']['ScopeId']
+key = config['DEVICE_A']['DeviceKey']
+
 # optional model Id for auto-provisioning
 try:
-    model_id = config['SymmetricKey']['ModelId']
+    model_id = config['DEVICE_A']['ModelId']
 except:
     model_id = None
 

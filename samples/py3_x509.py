@@ -7,9 +7,10 @@ from random import randint
 config = configparser.ConfigParser()
 config.read(os.path.join(os.path.dirname(__file__),'samples.ini'))
 
-device_id = config['x509']['DeviceId']
-scope_id = config['x509']['ScopeId']
-key = {'certFile': config['x509']['CertFilePath'],'keyFile':config['x509']['KeyFilePath'],'certPhrase':config['x509']['CertPassphrase']}
+# Change config section name to reflect sample.ini
+device_id = config['DEVICE_A']['DeviceId']
+scope_id = config['DEVICE_A']['ScopeId']
+key = {'certFile': config['DEVICE_A']['CertFilePath'],'keyFile':config['DEVICE_A']['KeyFilePath'],'certPhrase':config['DEVICE_A']['CertPassphrase']}
 
 
 if config['DEFAULT'].getboolean('Local'):
@@ -20,7 +21,7 @@ from iotc.aio import IoTCClient
 
 # optional model Id for auto-provisioning
 try:
-    model_id = config['x509']['ModelId']
+    model_id = config['DEVICE_A']['ModelId']
 except:
     model_id = None
 
