@@ -1,8 +1,11 @@
 import sys
 import asyncio
+import pkg_resources
 from .. import IOTCLogLevel, IOTCEvents, IOTCConnectType
 from azure.iot.device import X509, MethodResponse, Message
 from azure.iot.device.aio import IoTHubDeviceClient, ProvisioningDeviceClient
+
+__version__ = pkg_resources.get_distribution("iotc").version
 
 try:
     import hmac

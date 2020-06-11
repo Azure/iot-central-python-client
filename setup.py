@@ -8,11 +8,11 @@ from iotc import __name__
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-version='1.0.0'
+version="1.0.0"
 
 setuptools.setup(
     name=__name__,
-    version=version
+    version=version,
     author="Luca Druda",
     author_email="ludruda@microsoft.com",
     description="Azure IoT Central device client for Python",
