@@ -78,6 +78,7 @@ class IOTCMessageStatus:
 class IOTCEvents:
     IOTC_COMMAND = 2,
     IOTC_PROPERTIES = 4,
+    IOTC_ENQUEUED_COMMAND = 8
 
 
 class ConsoleLogger:
