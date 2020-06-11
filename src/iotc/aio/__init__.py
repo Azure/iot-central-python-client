@@ -47,11 +47,11 @@ class ConsoleLogger:
 
     async def info(self, message):
         if self._log_level != IOTCLogLevel.IOTC_LOGGING_DISABLED:
-            self._log(message)
+            await self._log(message)
 
     async def debug(self, message):
         if self._log_level == IOTCLogLevel.IOTC_LOGGING_ALL:
-            self._log(message)
+            await self._log(message)
 
     def set_log_level(self, log_level):
         self._log_level = log_level
@@ -64,10 +64,10 @@ class IoTCClient:
         self._cred_type = cred_type
         self._key_or_cert = key_or_cert
         self._model_id = None
-        self._connected = False
         self._events = {}
         # self._threads = None
         self._cmd_thread = None
+        self._enqueued_cmd_thread = None
         self._prop_thread = None
         self._global_endpoint = "global.azure-devices-provisioning.net"
         if logger is None:
@@ -86,10 +86,10 @@ class IoTCClient:
         :returns: Connection state
         :rtype: bool
         """
-        if self._connected:
-            return True
+        if not self._device_client:
+            print("ERROR: A connection was never attempted. You need to first call connect() before querying the connection state")
         else:
-            return False
+            return self._device_client.connected
 
     def set_global_endpoint(self, endpoint):
         """
@@ -170,7 +170,9 @@ class IoTCClient:
                 await asyncio.sleep(10)
                 continue
             # Wait for unknown method calls
-            method_request = await self._device_client.receive_method_request()
+            method_request = (
+                await self._device_client.receive_method_request()
+            )
             await self._logger.debug(
                 'Received command {}'.format(method_request.name))
             await self._device_client.send_method_response(MethodResponse.create_from_method_request(
@@ -178,6 +180,23 @@ class IoTCClient:
                     'result': True, 'data': 'Command received'}
             ))
             await cmd_cb(method_request, self._cmd_ack)
+
+    async def _on_enqueued_commands(self):
+        await self._logger.debug('Setup enqueued commands listener')
+
+        while True:
+            try:
+                enqueued_cmd_cb = self._events[IOTCEvents.IOTC_ENQUEUED_COMMAND]
+            except KeyError:
+                await self._logger.debug('Enqueued commands callback not found')
+                await asyncio.sleep(10)
+                continue
+            # Wait for unknown method calls
+            c2d = await self._device_client.receive_message()
+            c2d_name=c2d.custom_properties['method-name'].split(':')[1]
+            await self._logger.debug(
+                'Received enqueued command {}'.format(c2d_name))
+            await enqueued_cmd_cb(c2d_name,c2d.data)
 
     async def _send_message(self, payload, properties):
         msg = Message(payload)
@@ -257,7 +276,6 @@ class IoTCClient:
         # Connect to iothub
         try:
             await self._device_client.connect()
-            self._connected = True
             await self._logger.debug('Device connected')
         except:
             await self._logger.info('ERROR: Failed to connect to Hub')
@@ -266,9 +284,11 @@ class IoTCClient:
         # setup listeners
         self._prop_thread = asyncio.create_task(self._on_properties())
         self._cmd_thread = asyncio.create_task(self._on_commands())
+        self._enqueued_cmd_thread = asyncio.create_task(self._on_enqueued_commands())
         # self._threads = await asyncio.gather(
-        #     self._on_properties(),
-        #     self._on_commands()
+        #     # self._on_properties(),
+        #     self._on_commands(),
+        #     # self._on_enqueued_commands()
         # )
 
     async def _compute_derived_symmetric_key(self, secret, reg_id):

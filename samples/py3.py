@@ -14,13 +14,13 @@ if config['DEFAULT'].getboolean('Local'):
 from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents
 from iotc.aio import IoTCClient
 
-device_id = config['SymmetricKey']['DeviceId']
-scope_id = config['SymmetricKey']['ScopeId']
-key = config['SymmetricKey']['Key']
+device_id = config['DEVICE_MIGRATED']['DeviceId']
+scope_id = config['DEVICE_MIGRATED']['ScopeId']
+key = config['DEVICE_MIGRATED']['DeviceKey']
 
 # optional model Id for auto-provisioning
 try:
-    model_id = config['SymmetricKey']['ModelId']
+    model_id = config['DEVICE_MIGRATED']['ModelId']
 except:
     model_id = None
 
@@ -34,6 +34,9 @@ async def on_commands(command, ack):
     print(command.name)
     await ack(command.name, 'Command received', command.request_id)
 
+async def on_enqueued_commands(command_name,command_data):
+    print(command_name)
+    print(command_data)
 
 # change connect type to reflect the used key (device or group)
 client = IoTCClient(device_id, scope_id,
@@ -44,9 +47,19 @@ if model_id != None:
 client.set_log_level(IOTCLogLevel.IOTC_LOGGING_ALL)
 client.on(IOTCEvents.IOTC_PROPERTIES, on_props)
 client.on(IOTCEvents.IOTC_COMMAND, on_commands)
+client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, on_enqueued_commands)
 
 # iotc.setQosLevel(IOTQosLevel.IOTC_QOS_AT_MOST_ONCE)
 
+async def command_loop(device_client):
+    while True:
+        # Wait for unknown method calls
+        method_request = (await device_client.receive_method_request())
+        print('Received command {}'.format(method_request.name))
+        await device_client.send_method_response(MethodResponse.create_from_method_request(
+            method_request, 200, {
+                'result': True, 'data': 'Command received'}
+        ))
 
 async def main():
     await client.connect()
@@ -57,6 +70,6 @@ async def main():
             "b2fba1eb1": str(randint(20, 45))
         })
         await asyncio.sleep(3)
-
+    
 
 asyncio.run(main())
