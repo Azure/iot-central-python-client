@@ -15,13 +15,13 @@ if config['DEFAULT'].getboolean('Local'):
 from iotc import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
 
 # Change config section name to reflect sample.ini
-device_id = config['DEVICE_A']['DeviceId']
-scope_id = config['DEVICE_A']['ScopeId']
-key = config['DEVICE_A']['DeviceKey']
+device_id = config['DEVICE_M3']['DeviceId']
+scope_id = config['DEVICE_M3']['ScopeId']
+key = config['DEVICE_M3']['DeviceKey']
 
 # optional model Id for auto-provisioning
 try:
-    model_id = config['DEVICE_A']['ModelId']
+    model_id = config['DEVICE_M3']['ModelId']
 except:
     model_id = None
 
@@ -34,6 +34,9 @@ def on_commands(command, ack):
     print(command.name)
     ack(command.name, 'Command received', command.request_id)
 
+def on_enqueued_commands(command_name,command_data):
+    print('Received command {}'.format(command_name))
+
 
 # see client.Device documentation above for x509 argument sample
 client = IoTCClient(device_id, scope_id,
@@ -44,6 +47,7 @@ if model_id != None:
 client.set_log_level(IOTCLogLevel.IOTC_LOGGING_ALL)
 client.on(IOTCEvents.IOTC_PROPERTIES, on_props)
 client.on(IOTCEvents.IOTC_COMMAND, on_commands)
+client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, on_enqueued_commands)
 
 
 
