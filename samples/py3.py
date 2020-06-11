@@ -14,13 +14,13 @@ if config['DEFAULT'].getboolean('Local'):
 from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents
 from iotc.aio import IoTCClient
 
-device_id = config['DEVICE_MIGRATED']['DeviceId']
-scope_id = config['DEVICE_MIGRATED']['ScopeId']
-key = config['DEVICE_MIGRATED']['DeviceKey']
+device_id = config['DEVICE_A']['DeviceId']
+scope_id = config['DEVICE_A']['ScopeId']
+key = config['DEVICE_A']['DeviceKey']
 
 # optional model Id for auto-provisioning
 try:
-    model_id = config['DEVICE_MIGRATED']['ModelId']
+    model_id = config['DEVICE_A']['ModelId']
 except:
     model_id = None
 

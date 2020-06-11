@@ -15,16 +15,17 @@ if config['DEFAULT'].getboolean('Local'):
 from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents
 from iotc.aio import IoTCClient
 
-device_id = config['SymmetricKey']['DeviceId']
-scope_id = config['SymmetricKey']['ScopeId']
-key = config['SymmetricKey']['Key']
+# Change config section name to reflect sample.ini
+device_id = config['DEVICE_A']['DeviceId']
+scope_id = config['DEVICE_A']['ScopeId']
+key = config['DEVICE_A']['DeviceKey']
 
 event_hub_conn_str = config['EventHub']['ConnectionString']
 event_hub_name = config['EventHub']['EventHubName']
 
 # optional model Id for auto-provisioning
 try:
-    model_id = config['SymmetricKey']['ModelId']
+    model_id = config['DEVICE_A']['ModelId']
 except:
     model_id = None
 

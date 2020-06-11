@@ -47,19 +47,18 @@ Check out the [sample repository](samples) for example code showing how the SDK 
 Samples by default parse a configuration file including required credentials. Just create a file called **samples.ini** inside the _samples_ folder with a content like this:
 
 ```ini
-[SymmetricKey]
+[DEVICE_A]
 ScopeId = scopeid
 DeviceId = deviceid
-Key = group_or_device_key
-
-[x509]
-ScopeId = scopeid
-DeviceId = deviceid
+; either one or the other or nothing if running with certificates
+DeviceKey = device_key
+GroupKey = group_key
+; none if running with keys
 CertFilePath = path_to_cert_file
 KeyFilePath = path_to_key_file
 CertPassphrase = optional password
 ```
-The configuration file can include one of the sections or both. Section names must match references in the sample file.
+The configuration file can include one or more sections representing device connection details. Section names must match references in the sample file.
 
 ### Run samples with local changes
 It is possible to run samples against the local copy of the device client. This is particularly useful when testing patches not yet published upstream.

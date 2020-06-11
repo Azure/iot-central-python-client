@@ -1,15 +1,15 @@
 import setuptools
 import sys
 
-sys.path.insert(0, 'src')
-from iotc import __version__, __name__
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+version = "1.0.0"
+
 setuptools.setup(
-    name=__name__,
-    version=__version__,
+    name='iotc',
+    version=version,
     author="Luca Druda",
     author_email="ludruda@microsoft.com",
     description="Azure IoT Central device client for Python",
