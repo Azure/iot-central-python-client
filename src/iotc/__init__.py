@@ -9,8 +9,13 @@ from azure.iot.device import ProvisioningDeviceClient
 from azure.iot.device import Message, MethodResponse
 from datetime import datetime
 
-__version__ = pkg_resources.get_distribution("iotc").version
-
+# __version__ = pkg_resources.get_distribution("iotc").version
+if sys.version_info[0] < 3:
+    import urllib
+    quote = urllib.quote_plus
+else:
+    import urllib.parse
+    quote = urllib.parse.quote_plus
 
 try:
     import hmac
@@ -42,13 +47,6 @@ except ImportError:
     print("ERROR: missing dependency `uuid`")
     sys.exit()
 
-
-__version__ = "0.2.2-beta.1"
-__name__ = "iotc"
-
-
-def version():
-    print(__version__)
 
 
 class IOTCConnectType:
@@ -104,8 +102,8 @@ class ConsoleLogger:
         self._log_level = log_level
 
 
-class IoTCClient:
-    def __init__(self, device_id, scope_id, cred_type, key_or_cert, logger=None):
+class AbstractClient:
+    def __init__(self, device_id, scope_id, cred_type, key_or_cert):
         self._device_id = device_id
         self._scope_id = scope_id
         self._cred_type = cred_type
@@ -115,16 +113,9 @@ class IoTCClient:
         self._prop_thread = None
         self._cmd_thread = None
         self._enqueued_cmd_thread = None
+        self._content_type='application%2Fjson'
+        self._content_encoding='utf-8'
         self._global_endpoint = "global.azure-devices-provisioning.net"
-        if logger is None:
-            self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
-        else:
-            if hasattr(logger, "info") and hasattr(logger, "debug") and hasattr(logger, "set_log_level"):
-                self._logger = logger
-            else:
-                print("ERROR: Logger object has unsupported format. It must implement the following functions\n\
-                    info(message);\ndebug(message);\nset_log_level(message);")
-                sys.exit()
 
     def is_connected(self):
         """
@@ -158,6 +149,19 @@ class IoTCClient:
         """
         self._logger.set_log_level(log_level)
 
+    def set_content_type(self,content_type):
+        self._content_type = quote(content_type)
+
+    def set_content_encoding(self,content_encoding):
+        self._content_encoding = content_encoding
+
+    def _prepare_message(self,payload,properties):
+        msg = Message(payload,uuid.uuid4(),self._content_encoding,self._content_type)
+        if bool(properties):
+            for prop in properties:
+                msg.custom_properties[prop] = properties[prop]
+        return msg
+
     def on(self, eventname, callback):
         """
         Set a listener for a specific event
@@ -166,6 +170,21 @@ class IoTCClient:
         """
         self._events[eventname] = callback
         return 0
+
+class IoTCClient(AbstractClient):
+
+    def __init__(self, device_id, scope_id, cred_type, key_or_cert, logger=None):
+        AbstractClient.__init__(self,device_id, scope_id, cred_type, key_or_cert)
+        if logger is None:
+            self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
+        else:
+            if hasattr(logger, "info") and hasattr(logger, "debug") and hasattr(logger, "set_log_level"):
+                self._logger = logger
+            else:
+                print("ERROR: Logger object has unsupported format. It must implement the following functions\n\
+                    info(message);\ndebug(message);\nset_log_level(message);")
+                sys.exit()
+
 
     def _on_properties(self):
         self._logger.debug('Setup properties listener')
@@ -243,11 +262,7 @@ class IoTCClient:
             enqueued_cmd_cb(c2d_name,c2d.data)
 
     def _send_message(self, payload, properties):
-        msg = Message(payload)
-        msg.message_id = uuid.uuid4()
-        if bool(properties):
-            for prop in properties:
-                msg.custom_properties[prop] = properties[prop]
+        msg = self._prepare_message(payload,properties)
         self._device_client.send_message(msg)
 
     def send_property(self, payload):

@@ -9,7 +9,7 @@ import sys
 from contextlib import suppress
 
 from azure.iot.device.provisioning.models import RegistrationResult
-from azure.iot.device.iothub.models import MethodRequest
+from azure.iot.device.iothub.models import MethodRequest,Message
 
 
 config = configparser.ConfigParser()
@@ -57,7 +57,10 @@ cmdRequestId = 'abcdef'
 cmdName = 'command1'
 cmdPayload = 'payload'
 methodRequest = MethodRequest(cmdRequestId, cmdName, cmdPayload)
+enqueued_method_name='test:enqueued'
 
+enqueued_message = Message('test_enqueued')
+enqueued_message.custom_properties['method-name']=enqueued_method_name
 
 class NewRegState():
     def __init__(self):
@@ -85,6 +88,10 @@ class NewDeviceClient():
         await asyncio.sleep(3)
         return methodRequest
 
+    async def receive_message(self):
+        await asyncio.sleep(3)
+        return enqueued_message
+
     async def send_method_response(self, payload):
         return True
 
@@ -101,6 +108,7 @@ def async_return(result):
 async def stop_threads(client):
     client._prop_thread.cancel()
     client._cmd_thread.cancel()
+    client._enqueued_cmd_thread.cancel()
 
 
 @pytest.mark.asyncio
@@ -202,7 +210,7 @@ async def test_on_commands_before(mocker):
 
 
 @pytest.mark.asyncio
-async def test_onCommands_after(mocker):
+async def test_on_commands_after(mocker):
 
     client = init(mocker)
 
@@ -222,5 +230,42 @@ async def test_onCommands_after(mocker):
 
     try:
         await client._cmd_thread
+    except asyncio.CancelledError:
+        pass
+
+@pytest.mark.asyncio
+async def test_on_enqueued_commands_before(mocker):
+
+    client = init(mocker)
+
+    async def on_enqs(command_name,command_data):
+        assert command_name == enqueued_method_name.split(':')[1]
+        await stop_threads(client)
+        return True
+
+
+    client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, on_enqs)
+    await client.connect()
+    try:
+        await client._enqueued_cmd_thread
+    except asyncio.CancelledError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_on_enqueued_commands_after(mocker):
+
+    client = init(mocker)
+
+    async def on_enqs(command_name,command_data):
+        assert command_name == enqueued_method_name.split(':')[1]
+        await stop_threads(client)
+        return True
+
+
+    await client.connect()
+    client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, on_enqs)
+    try:
+        await client._enqueued_cmd_thread
     except asyncio.CancelledError:
         pass

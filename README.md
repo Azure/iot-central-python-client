@@ -154,12 +154,16 @@ while iotc.is_connected():
         })
         time.sleep(3)
 ```
-An optional *properties* object can be included in the send methods, to specify additional properties for the message (e.g. timestamp, content-type etc... ).
+An optional *properties* object can be included in the send methods, to specify additional properties for the message (e.g. timestamp,etc... ).
 Properties can be custom or part of the reserved ones (see list [here](https://github.com/Azure/azure-iot-sdk-csharp/blob/master/iothub/device/src/MessageSystemPropertyNames.cs#L36)).
+
+> Payload content type and encoding are set by default to 'application/json' and 'utf-8'. Alternative values can be set using these functions:<br/>
+_iotc.set_content_type(content_type)_ # .e.g 'text/plain'
+_iotc.set_content_encoding(content_encoding)_ # .e.g 'ascii'
 
 ### Send property update
 ```py
-iotc.sendProperty({'fieldName':'fieldValue'})
+iotc.send_property({'fieldName':'fieldValue'})
 ```
 ### Listen to properties update
 ```py
@@ -167,11 +171,11 @@ iotc.on(IOTCEvents.IOTC_PROPERTIES, callback)
 ```
 To provide setting sync aknowledgement, the callback must reply **True** if the new value has been applied or **False** otherwise
 ```py
-async def onProps(propName, propValue):
-    print(propValue)
+async def on_props(prop_name, prop_value):
+    print(prop_value)
     return True
 
-iotc.on(IOTCEvents.IOTC_PROPERTIES, onProps)
+iotc.on(IOTCEvents.IOTC_PROPERTIES, on_props)
 ```
 
 ### Listen to commands
@@ -182,7 +186,7 @@ To provide feedbacks for the command like execution result or progress, the clie
 
 The function accepts 3 arguments: command name, a custom response message and the request id for which the ack applies.
 ```py
-async def onCommands(command, ack):
+async def on_commands(command, ack):
     print(command.name)
     await ack(command.name, 'Command received', command.request_id)
 ```
@@ -191,7 +195,7 @@ async def onCommands(command, ack):
 
 The default log prints to console operations status and errors.
 This is the _IOTC_LOGGING_API_ONLY_ logging level.
-The function set_log_level() can be used to change options or disable logs. It accepts a _IOTCLogLevel_ value among the following:
+The function __set_log_level()__ can be used to change options or disable logs. It accepts a _IOTCLogLevel_ value among the following:
 
 -  IOTC_LOGGING_DISABLED (log disabled)
 -  IOTC_LOGGING_API_ONLY (information and errors, default)

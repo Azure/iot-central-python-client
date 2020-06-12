@@ -1,11 +1,11 @@
 import sys
 import asyncio
 import pkg_resources
-from .. import IOTCLogLevel, IOTCEvents, IOTCConnectType
+from .. import AbstractClient,IOTCLogLevel, IOTCEvents, IOTCConnectType
 from azure.iot.device import X509, MethodResponse, Message
 from azure.iot.device.aio import IoTHubDeviceClient, ProvisioningDeviceClient
 
-__version__ = pkg_resources.get_distribution("iotc").version
+# __version__ = pkg_resources.get_distribution("iotc").version
 
 try:
     import hmac
@@ -38,9 +38,6 @@ except ImportError:
     sys.exit()
 
 
-__version__ = "0.2.2-beta.1"
-__name__ = "iotc"
-
 class ConsoleLogger:
     def __init__(self, log_level):
         self._log_level = log_level
@@ -60,69 +57,19 @@ class ConsoleLogger:
         self._log_level = log_level
 
 
-class IoTCClient:
+class IoTCClient(AbstractClient):
+    
     def __init__(self, device_id, scope_id, cred_type, key_or_cert, logger=None):
-        self._device_id = device_id
-        self._scope_id = scope_id
-        self._cred_type = cred_type
-        self._key_or_cert = key_or_cert
-        self._model_id = None
-        self._events = {}
-        # self._threads = None
-        self._cmd_thread = None
-        self._enqueued_cmd_thread = None
-        self._prop_thread = None
-        self._global_endpoint = "global.azure-devices-provisioning.net"
+        AbstractClient.__init__(self,device_id, scope_id, cred_type, key_or_cert)
         if logger is None:
             self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
         else:
-            if hasattr(logger,"info") and hasattr(logger,"debug") and hasattr(logger,"set_log_level"):
+            if hasattr(logger, "info") and hasattr(logger, "debug") and hasattr(logger, "set_log_level"):
                 self._logger = logger
             else:
                 print("ERROR: Logger object has unsupported format. It must implement the following functions\n\
                     info(message);\ndebug(message);\nset_log_level(message);")
                 sys.exit()
-
-    def is_connected(self):
-        """
-        Check if device is connected to IoTCentral
-        :returns: Connection state
-        :rtype: bool
-        """
-        if not self._device_client:
-            print("ERROR: A connection was never attempted. You need to first call connect() before querying the connection state")
-        else:
-            return self._device_client.connected
-
-    def set_global_endpoint(self, endpoint):
-        """
-        Set the device provisioning endpoint.
-        :param str endpoint: Custom device provisioning endpoint. Default ('global.azure-devices-provisioning.net')
-        """
-        self._global_endpoint = endpoint
-
-    def set_model_id(self, model_id):
-        """
-        Set the model Id for the device to be associated
-        :param str model_id: Id for an existing model in the IoTCentral app
-        """
-        self._model_id = model_id
-
-    def set_log_level(self, log_level):
-        """
-        Set the logging level
-        :param IOTClog_level: Logging level. Available options are: ALL, API_ONLY, DISABLE
-        """
-        self._logger.set_log_level(log_level)
-
-    def on(self, eventname, callback):
-        """
-        Set a listener for a specific event
-        :param IOTCEvents eventname: Supported events: IOTC_PROPERTIES, IOTC_COMMANDS
-        :param function callback: Function executed when the specified event occurs
-        """
-        self._events[eventname] = callback
-        return 0
 
     async def _on_properties(self):
         await self._logger.debug('Setup properties listener')
@@ -202,11 +149,7 @@ class IoTCClient:
             await enqueued_cmd_cb(c2d_name,c2d.data)
 
     async def _send_message(self, payload, properties):
-        msg = Message(payload)
-        msg.message_id = uuid.uuid4()
-        if bool(properties):
-            for prop in properties:
-                msg.custom_properties[prop] = properties[prop]
+        msg = self._prepare_message(payload,properties)
         await self._device_client.send_message(msg)
 
     async def send_property(self, payload):

@@ -6,7 +6,7 @@ import os
 import sys
 
 
-from azure.iot.device.iothub.models import MethodRequest
+from azure.iot.device.iothub.models import MethodRequest,Message
 
 config = configparser.ConfigParser()
 config.read(os.path.join(os.path.dirname(__file__), '../tests.ini'))
@@ -54,6 +54,10 @@ cmdName = 'command1'
 cmdPayload = 'payload'
 methodRequest = MethodRequest(cmdRequestId, cmdName, cmdPayload)
 
+enqueued_method_name='test:enqueued'
+
+enqueued_message = Message('test_enqueued')
+enqueued_message.custom_properties['method-name']=enqueued_method_name
 
 class NewRegState():
     def __init__(self):
@@ -88,6 +92,10 @@ class NewDeviceClient():
 
     def receive_method_request(self):
         return methodRequest
+    
+    def receive_message(self):
+        return enqueued_message
+
 
     def send_method_response(self, payload):
         return True
@@ -179,3 +187,29 @@ def test_onCommands_after(mocker):
     # give at least 10 seconds for the new listener to be recognized. assign the listener after connection is discouraged
     time.sleep(11)
     on_cmds.assert_called_with(methodRequest, mockedAck)
+
+
+def test_on_enqueued_commands_before(mocker):
+
+    def on_enqs(command_name,command_data):
+        assert command_name == enqueued_method_name.split(':')[1]
+        return True
+
+    client = init(mocker)
+    client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, on_enqs)
+    client.connect()
+
+
+def test_on_enqueued_commands_after(mocker):
+
+    def on_enqs(command_name,command_data):
+        assert command_name == enqueued_method_name.split(':')[1]
+        return True
+
+    client = init(mocker)
+
+    client.connect()
+    client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, on_enqs)
+
+    # give at least 10 seconds for the new listener to be recognized. assign the listener after connection is discouraged
+    time.sleep(11)
