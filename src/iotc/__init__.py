@@ -9,7 +9,7 @@ from azure.iot.device import ProvisioningDeviceClient
 from azure.iot.device import Message, MethodResponse
 from datetime import datetime
 
-# __version__ = pkg_resources.get_distribution("iotc").version
+__version__ = pkg_resources.get_distribution("iotc").version
 if sys.version_info[0] < 3:
     import urllib
     quote = urllib.quote_plus
