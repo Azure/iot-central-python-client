@@ -1,2 +1,7 @@
 1.0.0 (2020-06-11)
 ------------------
+Breaking changes with v0.x.x
+ - "Settings" are now called "Properties". Event "on(SettingsUpdated)" is now "on(Properties)"
+ - Support for async client with Python 3.
+ - Support for group enrollment symmetric keys.
+ - Support for custom logger
