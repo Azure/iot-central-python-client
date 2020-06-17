@@ -15,7 +15,7 @@ setuptools.setup(
     description="Azure IoT Central device client for Python",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/lucadruda/iotc-python-device-client",
+    url="https://github.com/iot-for-all/iotc-python-client",
     packages=setuptools.find_packages('src'),
     package_dir={'': 'src'},
     license="MIT",
