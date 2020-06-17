@@ -30,5 +30,5 @@ setuptools.setup(
       'Programming Language :: Python :: 3.8',
     ],
     include_package_data=True,
-    install_requires=["azure-iot-device","uuid","hmac","hashlib","base64","json"]
+    install_requires=["azure-iot-device","uuid","hmac","hashlib","base64"]
 )
