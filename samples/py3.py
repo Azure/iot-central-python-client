@@ -14,13 +14,13 @@ if config['DEFAULT'].getboolean('Local'):
 from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents
 from iotc.aio import IoTCClient
 
-device_id = config['DEVICE_A']['DeviceId']
-scope_id = config['DEVICE_A']['ScopeId']
-key = config['DEVICE_A']['DeviceKey']
+device_id = config['DEVICE_M2']['DeviceId']
+scope_id = config['DEVICE_M2']['ScopeId']
+key = config['DEVICE_M2']['DeviceKey']
 
 # optional model Id for auto-provisioning
 try:
-    model_id = config['DEVICE_A']['ModelId']
+    model_id = config['DEVICE_M2']['ModelId']
 except:
     model_id = None
 
@@ -65,9 +65,9 @@ async def main():
     await client.connect()
     while client.is_connected():
         await client.send_telemetry({
-            't777b192a': str(randint(20, 45)),
-            'h6941c57b': str(randint(20, 45)),
-            "b2fba1eb1": str(randint(20, 45))
+            'accelerometerX': str(randint(20, 45)),
+            'accelerometerY': str(randint(20, 45)),
+            "accelerometerZ": str(randint(20, 45))
         })
         await asyncio.sleep(3)
     
