@@ -103,9 +103,9 @@ _'certPhrase'_ is optional and represents the password for the certificate if an
 
 #### SAS
 ```py
-scopeId = 'scopeID';
-device_id = 'device_id';
-sasKey = 'masterKey'; # or use device key directly
+scopeId = 'scopeID'
+device_id = 'device_id'
+sasKey = 'masterKey' # or use device key directly
 
 iotc = IoTCClient(device_id, scopeId,
                   IOTCConnectType.IOTC_CONNECT_SYMM_KEY, sasKey)
@@ -221,7 +221,7 @@ Template Id can be found in the device explorer page of IoTCentral
 Then call this method before connect():
 
 ```py
-iotc.setModelId('<modelId>');
+iotc.set_model_id('<modelId>')
 ```
 
 ### Manual approval (default)

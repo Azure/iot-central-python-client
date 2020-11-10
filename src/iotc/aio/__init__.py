@@ -198,8 +198,9 @@ class IoTCClient(AbstractClient):
                 provisioning_host=self._global_endpoint, registration_id=self._device_id, id_scope=self._scope_id, x509=x509)
 
         if self._model_id:
+            print("Provision model Id")
             self._provisioning_client.provisioning_payload = {
-                'iotcmodel_id': self._model_id}
+                'iotcModelId': self._model_id}
         try:
             registration_result = await self._provisioning_client.register()
             assigned_hub = registration_result.registration_state.assigned_hub

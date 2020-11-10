@@ -14,13 +14,13 @@ if config['DEFAULT'].getboolean('Local'):
 from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents
 from iotc.aio import IoTCClient
 
-device_id = config['DEVICE_A']['DeviceId']
-scope_id = config['DEVICE_A']['ScopeId']
-key = config['DEVICE_A']['DeviceKey']
+device_id = config['DEVICE_M3']['DeviceId']
+scope_id = config['DEVICE_M3']['ScopeId']
+key = config['DEVICE_M3']['DeviceKey']
 
 # optional model Id for auto-provisioning
 try:
-    model_id = config['DEVICE_A']['ModelId']
+    model_id = config['DEVICE_M3']['ModelId']
 except:
     model_id = None
 
@@ -40,7 +40,7 @@ async def on_enqueued_commands(command_name,command_data):
 
 # change connect type to reflect the used key (device or group)
 client = IoTCClient(device_id, scope_id,
-                  IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, key)
+                  IOTCConnectType.IOTC_CONNECT_SYMM_KEY, key)
 if model_id != None:
     client.set_model_id(model_id)
 
@@ -51,15 +51,6 @@ client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, on_enqueued_commands)
 
 # iotc.setQosLevel(IOTQosLevel.IOTC_QOS_AT_MOST_ONCE)
 
-async def command_loop(device_client):
-    while True:
-        # Wait for unknown method calls
-        method_request = (await device_client.receive_method_request())
-        print('Received command {}'.format(method_request.name))
-        await device_client.send_method_response(MethodResponse.create_from_method_request(
-            method_request, 200, {
-                'result': True, 'data': 'Command received'}
-        ))
 
 async def main():
     await client.connect()

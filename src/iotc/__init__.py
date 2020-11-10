@@ -311,7 +311,7 @@ class IoTCClient(AbstractClient):
 
         if self._model_id:
             self._provisioning_client.provisioning_payload = {
-                'iotcmodel_id': self._model_id}
+                'iotcModelId': self._model_id}
         try:
             registration_result = self._provisioning_client.register()
             assigned_hub = registration_result.registration_state.assigned_hub
