@@ -56,9 +56,9 @@ async def main():
     await client.connect()
     while client.is_connected():
         await client.send_telemetry({
-            't777b192a': str(randint(20, 45)),
-            'h6941c57b': str(randint(20, 45)),
-            "b2fba1eb1": str(randint(20, 45))
+            'accelerometerX': str(randint(20, 45)),
+            'accelerometerY': str(randint(20, 45)),
+            "accelerometerZ": str(randint(20, 45))
         })
         await asyncio.sleep(3)
     

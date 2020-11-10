@@ -209,10 +209,11 @@ class IoTCClient(AbstractClient):
                     self._logger.debug('Acknowledging {}'.format(prop))
                     self.send_property({
                         '{}'.format(prop): {
-                            "value": patch[prop]["value"],
-                            'status': 'completed',
-                            'desiredVersion': patch['$version'],
-                            'message': 'Property received'}
+                            "ac": 200,
+                            "ad": 'Property received',
+                            "av": patch['$version'],
+                            "value": patch[prop]["value"]
+                            }
                     })
                 else:
                     self._logger.debug(

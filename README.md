@@ -87,11 +87,11 @@ from iotc.aio import IoTCClient
 
 #### X509
 ```py
-scopeId = 'scopeID';
+scope_id = 'scope_id';
 device_id = 'device_id';
 key = {'certFile':'<CERT_CHAIN_FILE_PATH>','keyFile':'<CERT_KEY_FILE_PATH>','certPhrase':'<CERT_PASSWORD>'}
 
-iotc = IoTCClient(device_id, scopeId,
+iotc = IoTCClient(device_id, scope_id,
                   IOTCConnectType.IOTC_CONNECT_X509_CERT, key)
 ```
 IOTCConnectType enum can be imported from the same module of IoTCClient
@@ -108,7 +108,7 @@ device_id = 'device_id'
 sasKey = 'masterKey' # or use device key directly
 
 iotc = IoTCClient(device_id, scopeId,
-                  IOTCConnectType.IOTC_CONNECT_SYMM_KEY, sasKey)
+                  IOTCConnectType.IOTC_CONNECT_SYMM_KEY, sas_key)
 ```
 IOTCConnectType enum can be imported from the same module of IoTCClient
 
@@ -216,7 +216,7 @@ A device can send custom data during provision process: if a device is aware of 
 
 ### How to set IoTC template ID in your device
 Template Id can be found in the device explorer page of IoTCentral
-![Img](assets/modelId.jpg)
+![Img](https://github.com/iot-for-all/iotc-python-client/raw/master/assets/modelId.jpg)
 
 Then call this method before connect():
 
@@ -227,14 +227,14 @@ iotc.set_model_id('<modelId>')
 ### Manual approval (default)
 By default device auto-approval in IoT Central is disabled, which means that administrator needs to approve the device registration to complete the provisioning process.
 This can be done from explorer page after selecting the device
-![Img](assets/manual_approval.jpg)
+![Img](https://github.com/iot-for-all/iotc-python-client/raw/master/assets/manual_approval.jpg)
 
 
 ### Automatic approval
 To change default behavior, administrator can enable device auto-approval from Device Connection page under the Administration section.
 With automatic approval a device can be provisioned without any manual action and can start sending/receiving data after status changes to "Provisioned"
 
-![Img](assets/auto_approval.jpg)
+![Img](https://github.com/iot-for-all/iotc-python-client/raw/master/assets/auto_approval.jpg)
 
 ## License
 This samples is licensed with the MIT license. For more information, see [LICENSE](./LICENSE)
