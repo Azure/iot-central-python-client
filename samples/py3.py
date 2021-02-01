@@ -11,12 +11,32 @@ config.read(os.path.join(os.path.dirname(__file__), "samples.ini"))
 if config["DEFAULT"].getboolean("Local"):
     sys.path.insert(0, "src")
 
-from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents
+from iotc import (
+    IOTCConnectType,
+    IOTCLogLevel,
+    IOTCEvents,
+    Command,
+    CredentialsCache,
+    Storage,
+)
 from iotc.aio import IoTCClient
 
 device_id = config["DEVICE_M3"]["DeviceId"]
 scope_id = config["DEVICE_M3"]["ScopeId"]
 key = config["DEVICE_M3"]["DeviceKey"]
+
+
+class MemStorage(Storage):
+    def retrieve(self):
+        return CredentialsCache(
+            "iotc-1f9e162c-eacc-408d-9fb2-c9926a071037.azure-devices.net",
+            "javasdkcomponents2",
+            key,
+        )
+
+    def persist(self, credentials):
+        return None
+
 
 # optional model Id for auto-provisioning
 try:
@@ -30,9 +50,9 @@ async def on_props(property_name, property_value, component_name):
     return True
 
 
-async def on_commands(command, ack):
-    print(command.name)
-    await ack(command.name, "Command received", command.request_id)
+async def on_commands(command: Command):
+    print("Received command {} with value {}".format(command.name, command.value))
+    await command.reply()
 
 
 async def on_enqueued_commands(command_name, command_data):
@@ -41,7 +61,13 @@ async def on_enqueued_commands(command_name, command_data):
 
 
 # change connect type to reflect the used key (device or group)
-client = IoTCClient(device_id, scope_id, IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, key)
+client = IoTCClient(
+    device_id,
+    scope_id,
+    IOTCConnectType.IOTC_CONNECT_DEVICE_KEY,
+    key,
+    storage=MemStorage(),
+)
 if model_id != None:
     client.set_model_id(model_id)
 

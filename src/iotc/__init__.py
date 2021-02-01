@@ -7,6 +7,7 @@ from azure.iot.device import IoTHubDeviceClient
 from azure.iot.device import ProvisioningDeviceClient
 from azure.iot.device import Message, MethodResponse
 from datetime import datetime
+from .models import Command, CredentialsCache, Storage
 
 __version__ = pkg_resources.get_distribution("iotc").version
 if sys.version_info[0] < 3:
@@ -88,7 +89,7 @@ class ConsoleLogger:
         self._log_level = log_level
 
     def _log(self, message):
-        print(message)
+        print(message + "\n")
 
     def info(self, message):
         if self._log_level != IOTCLogLevel.IOTC_LOGGING_DISABLED:
@@ -103,7 +104,7 @@ class ConsoleLogger:
 
 
 class AbstractClient:
-    def __init__(self, device_id, scope_id, cred_type, key_or_cert):
+    def __init__(self, device_id, scope_id, cred_type, key_or_cert, storage=None):
         self._device_id = device_id
         self._scope_id = scope_id
         self._cred_type = cred_type
@@ -116,6 +117,7 @@ class AbstractClient:
         self._content_type = "application%2Fjson"
         self._content_encoding = "utf-8"
         self._global_endpoint = "global.azure-devices-provisioning.net"
+        self._storage = storage
 
     def is_connected(self):
         """
@@ -174,10 +176,13 @@ class AbstractClient:
         return 0
 
 
-
 class IoTCClient(AbstractClient):
-    def __init__(self, device_id, scope_id, cred_type, key_or_cert, logger=None):
-        AbstractClient.__init__(self, device_id, scope_id, cred_type, key_or_cert)
+    def __init__(
+        self, device_id, scope_id, cred_type, key_or_cert, logger=None, storage=None
+    ):
+        AbstractClient.__init__(
+            self, device_id, scope_id, cred_type, key_or_cert, storage
+        )
         if logger is None:
             self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
         else:
@@ -193,7 +198,6 @@ class IoTCClient(AbstractClient):
                     info(message);\ndebug(message);\nset_log_level(message);"
                 )
                 sys.exit()
-
 
     def _handle_property_ack(
         self,
@@ -232,10 +236,12 @@ class IoTCClient(AbstractClient):
                     }
                 )
         else:
-            self._logger.debug('Property "{}" unsuccessfully processed'.format(property_name))
+            self._logger.debug(
+                'Property "{}" unsuccessfully processed'.format(property_name)
+            )
 
     def _on_properties(self):
-        self._logger.debug("Setup properties listener")
+        self._logger.debug("Setup properties listener.")
         while True:
             try:
                 prop_cb = self._events[IOTCEvents.IOTC_PROPERTIES]
@@ -278,10 +284,19 @@ class IoTCClient(AbstractClient):
                         prop_cb, prop, patch[prop]["value"], patch["$version"]
                     )
 
-    def _cmd_ack(self, name, value, request_id):
-        self.send_property(
-            {"{}".format(name): {"value": value, "requestId": request_id}}
-        )
+    def _cmd_ack(self, name, value, request_id, component_name=None):
+        if component_name is not None:
+            self.send_property(
+                {
+                    "{}".format(component_name): {
+                        "{}".format(name): {"value": value, "requestId": request_id}
+                    }
+                }
+            )
+        else:
+            self.send_property(
+                {"{}".format(name): {"value": value, "requestId": request_id}}
+            )
 
     def _on_commands(self):
         self._logger.debug("Setup commands listener")
@@ -294,13 +309,36 @@ class IoTCClient(AbstractClient):
                 continue
             # Wait for unknown method calls
             method_request = self._device_client.receive_method_request()
-            self._logger.debug("Received command {}".format(method_request.name))
-            self._device_client.send_method_response(
-                MethodResponse.create_from_method_request(
-                    method_request, 200, {"result": True, "data": "Command received"}
+            command = Command(method_request.name, method_request.payload)
+            command_name_with_components = method_request.name.split("*")
+            if len(command_name_with_components) > 1:
+                # In a component
+                command = Command(
+                    command_name_with_components[1],
+                    method_request.payload,
+                    command_name_with_components[0],
                 )
+
+            def reply_fn():
+                self._device_client.send_method_response(
+                    MethodResponse.create_from_method_request(
+                        method_request,
+                        200,
+                        {"result": True, "data": "Command received"},
+                    )
+                )
+                self._cmd_ack(
+                    command.name,
+                    command.value,
+                    method_request.request_id,
+                    command.component_name,
+                )
+
+            command.reply = reply_fn
+            self._logger.debug(
+                "Received command {} with value {}".format(command.name, command.value)
             )
-            cmd_cb(method_request, self._cmd_ack)
+            cmd_cb(command)
 
     def _on_enqueued_commands(self):
         self._logger.debug("Setup enqueued commands listener")
@@ -338,90 +376,116 @@ class IoTCClient(AbstractClient):
         self._logger.info("Sending telemetry message: {}".format(payload))
         self._send_message(json.dumps(payload), properties)
 
-    def connect(self):
+    def connect(self, force_dps=False):
         """
         Connects the device.
         :raises exception: If connection fails
         """
-        if self._cred_type in (
-            IOTCConnectType.IOTC_CONNECT_DEVICE_KEY,
-            IOTCConnectType.IOTC_CONNECT_SYMM_KEY,
-        ):
-            if self._cred_type == IOTCConnectType.IOTC_CONNECT_SYMM_KEY:
-                self._key_or_cert = self._compute_derived_symmetric_key(
-                    self._key_or_cert, self._device_id
-                )
-                self._logger.debug("Device key: {}".format(self._key_or_cert))
+        _credentials = None
 
-            self._provisioning_client = (
-                ProvisioningDeviceClient.create_from_symmetric_key(
-                    self._global_endpoint,
-                    self._device_id,
-                    self._scope_id,
-                    self._key_or_cert,
+        if self._storage is not None and force_dps is False:
+            _credentials = self._storage.retrieve()
+            self._logger.debug("Found cached credentials")
+
+        if _credentials is None:
+            if self._cred_type in (
+                IOTCConnectType.IOTC_CONNECT_DEVICE_KEY,
+                IOTCConnectType.IOTC_CONNECT_SYMM_KEY,
+            ):
+                if self._cred_type == IOTCConnectType.IOTC_CONNECT_SYMM_KEY:
+                    self._key_or_cert = self._compute_derived_symmetric_key(
+                        self._key_or_cert, self._device_id
+                    )
+                    self._logger.debug("Device key: {}".format(self._key_or_cert))
+
+                self._provisioning_client = (
+                    ProvisioningDeviceClient.create_from_symmetric_key(
+                        self._global_endpoint,
+                        self._device_id,
+                        self._scope_id,
+                        self._key_or_cert,
+                    )
                 )
-            )
-        else:
-            self._key_file = self._key_or_cert["key_file"]
-            self._cert_file = self._key_or_cert["cert_file"]
+            else:
+                self._key_file = self._key_or_cert["key_file"]
+                self._cert_file = self._key_or_cert["cert_file"]
+                try:
+                    self._cert_phrase = self._key_or_cert["cert_phrase"]
+                    x509 = X509(self._cert_file, self._key_file, self._cert_phrase)
+                except:
+                    self._logger.debug(
+                        "No passphrase available for certificate. Trying without it"
+                    )
+                    x509 = X509(self._cert_file, self._key_file)
+                # Certificate provisioning
+                self._provisioning_client = (
+                    ProvisioningDeviceClient.create_from_x509_certificate(
+                        provisioning_host=self._global_endpoint,
+                        registration_id=self._device_id,
+                        id_scope=self._scope_id,
+                        x509=x509,
+                    )
+                )
+
+            if self._model_id:
+                self._provisioning_client.provisioning_payload = {
+                    "iotcModelId": self._model_id
+                }
             try:
-                self._cert_phrase = self._key_or_cert["cert_phrase"]
-                x509 = X509(self._cert_file, self._key_file, self._cert_phrase)
-            except:
+                registration_result = self._provisioning_client.register()
+                assigned_hub = registration_result.registration_state.assigned_hub
+                self._logger.debug(assigned_hub)
+                _credentials = CredentialsCache(
+                    assigned_hub,
+                    self._device_id,
+                    device_key=self._key_or_cert
+                    if self._cred_type
+                    in (
+                        IOTCConnectType.IOTC_CONNECT_DEVICE_KEY,
+                        IOTCConnectType.IOTC_CONNECT_SYMM_KEY,
+                    )
+                    else None,
+                    certificate=self._key_or_cert
+                    if self._cred_type == IOTCConnectType.IOTC_CONNECT_X509_CERT
+                    else None,
+                )
                 self._logger.debug(
-                    "No passphrase available for certificate. Trying without it"
+                    "IoTHub Connection string: {}".format(
+                        _credentials.connection_string
+                    )
                 )
-                x509 = X509(self._cert_file, self._key_file)
-            # Certificate provisioning
-            self._provisioning_client = (
-                ProvisioningDeviceClient.create_from_x509_certificate(
-                    provisioning_host=self._global_endpoint,
-                    registration_id=self._device_id,
-                    id_scope=self._scope_id,
-                    x509=x509,
-                )
-            )
+                if self._storage is not None:
+                    self._storage.persist(_credentials)
 
-        if self._model_id:
-            self._provisioning_client.provisioning_payload = {
-                "iotcModelId": self._model_id
-            }
+            except:
+                t, v, tb = sys.exc_info()
+                self._logger.info(
+                    "ERROR: Failed to get device provisioning information"
+                )
+                raise t(v)
+        # Connect to iothub
         try:
-            registration_result = self._provisioning_client.register()
-            assigned_hub = registration_result.registration_state.assigned_hub
-            self._logger.debug(assigned_hub)
-            self._hub_conn_string = "HostName={};DeviceId={};SharedAccessKey={}".format(
-                assigned_hub, self._device_id, self._key_or_cert
-            )
-            self._logger.debug(
-                "IoTHub Connection string: {}".format(self._hub_conn_string)
-            )
-
             if self._cred_type in (
                 IOTCConnectType.IOTC_CONNECT_DEVICE_KEY,
                 IOTCConnectType.IOTC_CONNECT_SYMM_KEY,
             ):
                 self._device_client = IoTHubDeviceClient.create_from_connection_string(
-                    self._hub_conn_string
+                    _credentials.connection_string
                 )
             else:
                 self._device_client = IoTHubDeviceClient.create_from_x509_certificate(
                     x509=x509,
-                    hostname=assigned_hub,
-                    device_id=registration_result.registration_state.device_id,
+                    hostname=_credentials.hub_name,
+                    device_id=_credentials.device_id,
                 )
-        except:
-            t, v, tb = sys.exc_info()
-            self._logger.info("ERROR: Failed to get device provisioning information")
-            raise t(v)
-        # Connect to iothub
-        try:
             self._device_client.connect()
             self._logger.debug("Device connected")
         except:
             t, v, tb = sys.exc_info()
             self._logger.info("ERROR: Failed to connect to Hub")
-            raise t(v)
+            if force_dps is True:
+                raise t(v)
+            self.connect(True)
 
         # setup listeners
 

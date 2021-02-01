@@ -12,16 +12,23 @@ config.read(os.path.join(os.path.dirname(__file__),'samples.ini'))
 if config['DEFAULT'].getboolean('Local'):
     sys.path.insert(0, 'src')
 
-from iotc import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents
+from iotc import IoTCClient, IOTCConnectType, IOTCLogLevel, IOTCEvents,Storage,CredentialsCache
+
 
 # Change config section name to reflect sample.ini
-device_id = config['DEVICE_A']['DeviceId']
-scope_id = config['DEVICE_A']['ScopeId']
-key = config['DEVICE_A']['DeviceKey']
+device_id = config["DEVICE_M3"]["DeviceId"]
+scope_id = config["DEVICE_M3"]["ScopeId"]
+key = config["DEVICE_M3"]["DeviceKey"]
+
+class MemStorage(Storage):
+    def retrieve(self):
+        return CredentialsCache('iotc-1f9e162c-eacc-408d-9fb2-c9926a071037.azure-devices.net','javasdkcomponents2',key)
+    def persist(self, credentials):
+        return None
 
 # optional model Id for auto-provisioning
 try:
-    model_id = config['DEVICE_M3']['ModelId']
+    model_id = config["DEVICE_M3"]["ModelId"]
 except:
     model_id = None
 
@@ -30,14 +37,15 @@ def on_props(propName, propValue):
     return True
 
 
-def on_commands(command, ack):
-    print(command.name)
-    ack(command.name, 'Command received', command.request_id)
+def on_commands(command):
+    print('Received command {} with value {}'.format(command.name,command.value))
+    command.reply()
+
 
 
 # see client.Device documentation above for x509 argument sample
 client = IoTCClient(device_id, scope_id,
-                  IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, key)
+                  IOTCConnectType.IOTC_CONNECT_DEVICE_KEY, key,storage=MemStorage())
 if model_id != None:
     client.set_model_id(model_id)
 

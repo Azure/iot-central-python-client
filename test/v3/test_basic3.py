@@ -200,7 +200,7 @@ async def test_on_commands_before(mocker):
 
     client = init(mocker)
 
-    async def onCmds(command, ack):
+    async def onCmds(command):
         ret = ack()
         assert ret == "mocked"
         await stop_threads(client)
