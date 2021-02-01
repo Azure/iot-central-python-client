@@ -103,6 +103,9 @@ class NewDeviceClient():
     def patch_twin_reported_properties(self, payload):
         return True
 
+    def get_twin(self):
+        return 'Twin'
+
 
 def init(mocker):
     client = IoTCClient(device_id, scopeId,
@@ -139,7 +142,7 @@ def test_onproperties_before(mocker):
     mocker.patch.object(client, 'send_property', mock.Mock())
     client.on(IOTCEvents.IOTC_PROPERTIES, on_props)
     client.connect()
-    on_props.assert_called_with('prop1', 40)
+    on_props.assert_called_with('prop1', 40,None)
 
 
 def test_onproperties_after(mocker):
@@ -151,7 +154,7 @@ def test_onproperties_after(mocker):
     client.on(IOTCEvents.IOTC_PROPERTIES, on_props)
     # give at least 10 seconds for the new listener to be recognized. assign the listener after connection is discouraged
     time.sleep(11)
-    on_props.assert_called_with('prop1', 40)
+    on_props.assert_called_with('prop1', 40,None)
 
 
 def test_onCommands_before(mocker):

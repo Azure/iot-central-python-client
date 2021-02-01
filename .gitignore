@@ -14,3 +14,9 @@ exp.py
 *.egg-info
 build
 dist
+
+# virtualenv
+Include/
+Lib/
+Scripts/
+pyvenv.cfg
