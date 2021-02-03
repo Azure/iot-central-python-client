@@ -1,6 +1,10 @@
 import abc
 
 
+class GracefulExit(SystemExit):
+    code = 1
+
+
 class CredentialsCache(object):
     def __init__(self, hub_name, device_id, device_key=None, certificate=None):
         self._hub_name = hub_name

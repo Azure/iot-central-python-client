@@ -1,4 +1,5 @@
 import sys
+import signal
 import asyncio
 import pkg_resources
 from .. import (
@@ -9,6 +10,7 @@ from .. import (
     Command,
     CredentialsCache,
     Storage,
+    GracefulExit,
 )
 from azure.iot.device import X509, MethodResponse, Message
 from azure.iot.device.aio import IoTHubDeviceClient, ProvisioningDeviceClient
@@ -88,6 +90,10 @@ class IoTCClient(AbstractClient):
                 )
                 sys.exit()
 
+    def raise_graceful_exit(self, *args):
+        print("Shutting down...")
+        raise GracefulExit
+        
     async def _handle_property_ack(
         self,
         callback,
@@ -277,7 +283,7 @@ class IoTCClient(AbstractClient):
 
         if self._storage is not None and force_dps is False:
             _credentials = self._storage.retrieve()
-            self._logger.debug("Found cached credentials")
+            await self._logger.debug("Found cached credentials")
 
         if _credentials is None:
             if self._cred_type in (
@@ -350,6 +356,7 @@ class IoTCClient(AbstractClient):
                 sys.exit()
         # Connect to iothub
         try:
+            print(_credentials.connection_string)
             if self._cred_type in (
                 IOTCConnectType.IOTC_CONNECT_DEVICE_KEY,
                 IOTCConnectType.IOTC_CONNECT_SYMM_KEY,
@@ -377,11 +384,33 @@ class IoTCClient(AbstractClient):
         self._prop_thread = asyncio.create_task(self._on_properties())
         self._cmd_thread = asyncio.create_task(self._on_commands())
         self._enqueued_cmd_thread = asyncio.create_task(self._on_enqueued_commands())
-        # self._threads = await asyncio.gather(
-        #     # self._on_properties(),
-        #     self._on_commands(),
-        #     # self._on_enqueued_commands()
-        # )
+
+    async def run_telemetry_loop(self, telemetry_loop):
+        self._telemetry_loop = asyncio.create_task(telemetry_loop())
+        signal.signal(
+            signal.SIGINT,
+            self.raise_graceful_exit
+        )
+        signal.signal(
+            signal.SIGTERM,
+            self.raise_graceful_exit
+        )
+        try:
+            self._telemetry_loop.add_done_callback(self.raise_graceful_exit)
+            await asyncio.gather(
+                self._prop_thread,
+                self._cmd_thread,
+                self._enqueued_cmd_thread,
+                self._telemetry_loop,
+            )
+        except GracefulExit:
+            pass
+        finally:
+            await self._logger.info("Received shutdown signal!")
+            await self._logger.info("Disconnecting client...")
+            await self._device_client.disconnect()
+            await self._logger.info("Client disconnected.")
+            await self._logger.info("See you!")
 
     async def _compute_derived_symmetric_key(self, secret, reg_id):
         # pylint: disable=no-member

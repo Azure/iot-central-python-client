@@ -7,7 +7,7 @@ from azure.iot.device import IoTHubDeviceClient
 from azure.iot.device import ProvisioningDeviceClient
 from azure.iot.device import Message, MethodResponse
 from datetime import datetime
-from .models import Command, CredentialsCache, Storage
+from .models import Command, CredentialsCache, Storage, GracefulExit
 
 __version__ = pkg_resources.get_distribution("iotc").version
 if sys.version_info[0] < 3:

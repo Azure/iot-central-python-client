@@ -78,10 +78,7 @@ client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, on_enqueued_commands)
 
 # iotc.setQosLevel(IOTQosLevel.IOTC_QOS_AT_MOST_ONCE)
 
-
-async def main():
-    await client.connect()
-    await client.send_property({"writeableProp": 50})
+async def telemetry_loop():
     while client.is_connected():
         await client.send_telemetry(
             {
@@ -94,5 +91,10 @@ async def main():
         )
         await asyncio.sleep(3)
 
+async def main():
+    await client.connect()
+    await client.send_property({"writeableProp": 50})
+    await client.run_telemetry_loop(telemetry_loop)
+    
 
 asyncio.run(main())
