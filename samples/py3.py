@@ -55,9 +55,8 @@ async def on_commands(command: Command):
     await command.reply()
 
 
-async def on_enqueued_commands(command_name, command_data):
-    print(command_name)
-    print(command_data)
+async def on_enqueued_commands(command:Command):
+    print("Received offline command {} with value {}".format(command.name, command.value))
 
 
 # change connect type to reflect the used key (device or group)

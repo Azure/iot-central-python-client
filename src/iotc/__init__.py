@@ -10,6 +10,7 @@ from datetime import datetime
 from .models import Command, CredentialsCache, Storage, GracefulExit
 
 __version__ = pkg_resources.get_distribution("iotc").version
+
 if sys.version_info[0] < 3:
     import urllib
 
