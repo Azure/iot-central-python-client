@@ -452,9 +452,13 @@ class IoTCClient(AbstractClient):
                 self._enqueued_cmd_thread,
             )
             try:
-                # for task in asyncio.all_tasks():
-                #     task.cancel()
-                await tasks
+                for task in tasks:
+                    try:
+                        task.cancel()
+                    except:
+                        pass
+                with suppress(asyncio.CancelledError):
+                    await tasks
             except:
                 pass
         await self._logger.info("Disconnecting client...")
