@@ -10,8 +10,7 @@ config = configparser.ConfigParser()
 config.read(os.path.join(os.path.dirname(__file__), "../tests.ini"))
 
 if config["TESTS"].getboolean("Local"):
-    sys.path.append("src")
-
+    sys.path.insert(0, "src")
 
 from azure.iot.device import MethodRequest, Message
 from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents, Command
@@ -92,22 +91,37 @@ async def iotc_client(mocker):
     mocked_client.set_log_level(IOTCLogLevel.IOTC_LOGGING_ALL)
     mocked_client._device_client = device_client_instance
     yield mocked_client
-    await stop()
+    try:
+        await mocked_client.disconnect()
+    except asyncio.CancelledError:
+        pass
+
+
+def on_stub_called(client, stub, expected):
+    async def run_disconnection(*args):
+        print("disconnecting")
+        await client.disconnect()
+        # try:
+        #     stub.assert_called_with(expected)
+        # except:
+        #     raise
+
+    return run_disconnection
+
+
+async def side():
+    await asyncio.sleep(0.1)
 
 
 @pytest.mark.asyncio
 async def test_on_properties_triggered(mocker, iotc_client):
     prop_stub = mocker.AsyncMock()
     iotc_client.on(IOTCEvents.IOTC_PROPERTIES, prop_stub)
-    iotc_client._device_client.receive_twin_desired_properties_patch = trigger_desired(
+    iotc_client._device_client.receive_twin_desired_properties_patch.return_value = (
         DEFAULT_COMPONENT_PROP
     )
     await iotc_client.connect()
-    await asyncio.sleep(2)
-    try:
-        iotc_client._prop_thread.cancel()
-    except asyncio.CancelledError:
-        pass
+    await asyncio.sleep(0.1)
     prop_stub.assert_called_with("prop1", "value1", None)
 
 
@@ -115,15 +129,11 @@ async def test_on_properties_triggered(mocker, iotc_client):
 async def test_on_properties_triggered_with_component(mocker, iotc_client):
     prop_stub = mocker.AsyncMock()
     iotc_client.on(IOTCEvents.IOTC_PROPERTIES, prop_stub)
-    iotc_client._device_client.receive_twin_desired_properties_patch = trigger_desired(
+    iotc_client._device_client.receive_twin_desired_properties_patch.return_value = (
         COMPONENT_PROP
     )
     await iotc_client.connect()
-    await asyncio.sleep(2)
-    try:
-        iotc_client._prop_thread.cancel()
-    except asyncio.CancelledError:
-        pass
+    await asyncio.sleep(0.1)
     prop_stub.assert_called_with("prop1", "value1", "component1")
 
 
@@ -133,15 +143,11 @@ async def test_on_properties_triggered_with_complex_component(mocker, iotc_clien
     # set return value, otherwise a check for the function result will execute a mock again
     prop_stub.return_value = True
     iotc_client.on(IOTCEvents.IOTC_PROPERTIES, prop_stub)
-    iotc_client._device_client.receive_twin_desired_properties_patch = trigger_desired(
+    iotc_client._device_client.receive_twin_desired_properties_patch.return_value = (
         COMPLEX_COMPONENT_PROP
     )
     await iotc_client.connect()
-    await asyncio.sleep(2)
-    try:
-        iotc_client._prop_thread.cancel()
-    except asyncio.CancelledError:
-        pass
+    await asyncio.sleep(0.1)
     prop_stub.assert_has_calls(
         [
             mocker.call("prop1", "value1", "component1"),
@@ -156,15 +162,9 @@ async def test_on_properties_triggered_with_complex_component(mocker, iotc_clien
 async def test_on_command_triggered(mocker, iotc_client):
     cmd_stub = mocker.AsyncMock()
     iotc_client.on(IOTCEvents.IOTC_COMMAND, cmd_stub)
-    iotc_client._device_client.receive_method_request = simulate_command(
-        DEFAULT_COMMAND
-    )
+    iotc_client._device_client.receive_method_request.return_value = DEFAULT_COMMAND
     await iotc_client.connect()
-    await asyncio.sleep(2)
-    try:
-        iotc_client._cmd_thread.cancel()
-    except asyncio.CancelledError:
-        pass
+    await asyncio.sleep(0.1)
     cmd_stub.assert_called_with(Command("cmd1", "sample", None))
 
 
@@ -172,15 +172,9 @@ async def test_on_command_triggered(mocker, iotc_client):
 async def test_on_command_triggered_with_component(mocker, iotc_client):
     cmd_stub = mocker.AsyncMock()
     iotc_client.on(IOTCEvents.IOTC_COMMAND, cmd_stub)
-    iotc_client._device_client.receive_method_request = simulate_command(
-        COMPONENT_COMMAND
-    )
+    iotc_client._device_client.receive_method_request.return_value = COMPONENT_COMMAND
     await iotc_client.connect()
-    await asyncio.sleep(2)
-    try:
-        iotc_client._cmd_thread.cancel()
-    except asyncio.CancelledError:
-        pass
+    await asyncio.sleep(0.1)
     cmd_stub.assert_called_with(Command("cmd1", "sample", "commandComponent"))
 
 
@@ -188,15 +182,9 @@ async def test_on_command_triggered_with_component(mocker, iotc_client):
 async def test_on_enqueued_command_triggered(mocker, iotc_client):
     cmd_stub = mocker.AsyncMock()
     iotc_client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, cmd_stub)
-    iotc_client._device_client.receive_message = simulate_command(
-        DEFAULT_COMPONENT_ENQUEUED
-    )
+    iotc_client._device_client.receive_message.return_value = DEFAULT_COMPONENT_ENQUEUED
     await iotc_client.connect()
-    await asyncio.sleep(2)
-    try:
-        iotc_client._enqueued_cmd_thread.cancel()
-    except asyncio.CancelledError:
-        pass
+    await asyncio.sleep(0.1)
     cmd_stub.assert_called_with(Command("command_name", "sample_data", None))
 
 
@@ -204,11 +192,7 @@ async def test_on_enqueued_command_triggered(mocker, iotc_client):
 async def test_on_enqueued_command_triggered_with_component(mocker, iotc_client):
     cmd_stub = mocker.AsyncMock()
     iotc_client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, cmd_stub)
-    iotc_client._device_client.receive_message = simulate_command(COMPONENT_ENQUEUED)
+    iotc_client._device_client.receive_message.return_value = COMPONENT_ENQUEUED
     await iotc_client.connect()
-    await asyncio.sleep(2)
-    try:
-        iotc_client._enqueued_cmd_thread.cancel()
-    except asyncio.CancelledError:
-        pass
+    await asyncio.sleep(0.1)
     cmd_stub.assert_called_with(Command("command_name", "sample_data", "component"))

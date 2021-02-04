@@ -15,37 +15,41 @@ from .. import (
 from azure.iot.device import X509, MethodResponse, Message
 from azure.iot.device.aio import IoTHubDeviceClient, ProvisioningDeviceClient
 
-__version__ = pkg_resources.get_distribution("iotc").version
+try:
+    __version__ = pkg_resources.get_distribution("iotc").version
+except:
+    pass
+terminate = False
 
 try:
     import hmac
 except ImportError:
     print("ERROR: missing dependency `hmac`")
-    sys.exit()
+    sys.exit(3)
 
 try:
     import hashlib
 except ImportError:
     print("ERROR: missing dependency `hashlib`")
-    sys.exit()
+    sys.exit(3)
 
 try:
     import base64
 except ImportError:
     print("ERROR: missing dependency `base64`")
-    sys.exit()
+    sys.exit(3)
 
 try:
     import json
 except ImportError:
     print("ERROR: missing dependency `json`")
-    sys.exit()
+    sys.exit(3)
 
 try:
     import uuid
 except ImportError:
     print("ERROR: missing dependency `uuid`")
-    sys.exit()
+    sys.exit(3)
 
 
 class ConsoleLogger:
@@ -91,8 +95,13 @@ class IoTCClient(AbstractClient):
                 sys.exit()
 
     def raise_graceful_exit(self, *args):
-        print("Shutting down...")
-        raise GracefulExit
+        async def handle_disconnection():
+            await self.disconnect()
+
+        try:
+            asyncio.create_task(handle_disconnection())
+        except:
+            pass
 
     async def _handle_property_ack(
         self,
@@ -136,13 +145,14 @@ class IoTCClient(AbstractClient):
             )
 
     async def _on_properties(self):
+        global terminate
         await self._logger.debug("Setup properties listener")
-        while True:
+        while not terminate:
             try:
                 prop_cb = self._events[IOTCEvents.IOTC_PROPERTIES]
             except KeyError:
-                await self._logger.debug("Properties callback not found")
-                await asyncio.sleep(10)
+                # await self._logger.debug("Properties callback not found")
+                await asyncio.sleep(0.1)
                 continue
             patch = await self._device_client.receive_twin_desired_properties_patch()
             await self._logger.debug("Received desired properties. {}".format(patch))
@@ -177,6 +187,9 @@ class IoTCClient(AbstractClient):
                     await self._handle_property_ack(
                         prop_cb, prop, patch[prop]["value"], patch["$version"]
                     )
+            await asyncio.sleep(0.1)
+
+        await self._logger.debug("Stopping properties listener...")
 
     async def _cmd_ack(self, name, value, request_id, component_name):
         if component_name is not None:
@@ -194,13 +207,13 @@ class IoTCClient(AbstractClient):
 
     async def _on_commands(self):
         await self._logger.debug("Setup commands listener")
-
-        while True:
+        global terminate
+        while not terminate:
             try:
                 cmd_cb = self._events[IOTCEvents.IOTC_COMMAND]
             except KeyError:
-                await self._logger.debug("Commands callback not found")
-                await asyncio.sleep(10)
+                # await self._logger.debug("Commands callback not found")
+                await asyncio.sleep(0.1)
                 continue
             # Wait for unknown method calls
             method_request = await self._device_client.receive_method_request()
@@ -235,16 +248,18 @@ class IoTCClient(AbstractClient):
             await self._logger.debug("Received command {}".format(method_request.name))
 
             await cmd_cb(command)
+            await asyncio.sleep(0.1)
+        await self._logger.debug("Stopping commands listener...")
 
     async def _on_enqueued_commands(self):
         await self._logger.debug("Setup enqueued commands listener")
-
-        while True:
+        global terminate
+        while not terminate:
             try:
                 enqueued_cmd_cb = self._events[IOTCEvents.IOTC_ENQUEUED_COMMAND]
             except KeyError:
                 await self._logger.debug("Enqueued commands callback not found")
-                await asyncio.sleep(10)
+                await asyncio.sleep(0.1)
                 continue
             # Wait for unknown method calls
             c2d = await self._device_client.receive_message()
@@ -267,6 +282,8 @@ class IoTCClient(AbstractClient):
             await self._logger.debug("Received offline command {}".format(command.name))
 
             await enqueued_cmd_cb(command)
+            await asyncio.sleep(0.1)
+        await self._logger.debug("Stopping enqueued commands listener...")
 
     async def _send_message(self, payload, properties):
         msg = self._prepare_message(payload, properties)
@@ -294,7 +311,8 @@ class IoTCClient(AbstractClient):
         Connects the device.
         :raises exception: If connection fails
         """
-
+        global terminate
+        terminate = False
         _credentials = None
 
         if self._storage is not None and force_dps is False:
@@ -369,7 +387,7 @@ class IoTCClient(AbstractClient):
                 await self._logger.info(
                     "ERROR: Failed to get device provisioning information"
                 )
-                sys.exit()
+                sys.exit(1)
         # Connect to iothub
         try:
             print(_credentials.connection_string)
@@ -393,20 +411,22 @@ class IoTCClient(AbstractClient):
         except:
             await self._logger.info("ERROR: Failed to connect to Hub")
             if force_dps is True:
-                sys.exit()
+                sys.exit(1)
             await self.connect(True)
 
         # setup listeners
         self._prop_thread = asyncio.create_task(self._on_properties())
         self._cmd_thread = asyncio.create_task(self._on_commands())
         self._enqueued_cmd_thread = asyncio.create_task(self._on_enqueued_commands())
+        signal.signal(signal.SIGINT, self.raise_graceful_exit)
+        signal.signal(signal.SIGTERM, self.raise_graceful_exit)
 
     async def run_telemetry_loop(self, telemetry_loop):
         self._telemetry_loop = asyncio.create_task(telemetry_loop())
-        signal.signal(signal.SIGINT, self.raise_graceful_exit)
-        signal.signal(signal.SIGTERM, self.raise_graceful_exit)
+        signal.signal(signal.SIGINT, asyncio.create_task(self.raise_graceful_exit))
+        signal.signal(signal.SIGTERM, asyncio.create_task(self.raise_graceful_exit))
         try:
-            self._telemetry_loop.add_done_callback(self.raise_graceful_exit)
+            # self._telemetry_loop.add_done_callback(self.raise_graceful_exit)
             await asyncio.gather(
                 self._prop_thread,
                 self._cmd_thread,
@@ -422,13 +442,33 @@ class IoTCClient(AbstractClient):
             await self._logger.info("Client disconnected.")
             await self._logger.info("See you!")
 
+    async def disconnect(self):
+        global terminate
+        terminate = True
+        if self._prop_thread is not None and self._cmd_thread is not None and self._enqueued_cmd_thread is not None:
+            tasks = asyncio.gather(
+                self._prop_thread,
+                self._cmd_thread,
+                self._enqueued_cmd_thread,
+            )
+            try:
+                # for task in asyncio.all_tasks():
+                #     task.cancel()
+                await tasks
+            except:
+                pass
+        await self._logger.info("Disconnecting client...")
+        await self._device_client.disconnect()
+        await self._logger.info("Client disconnected.")
+        await self._logger.info("See you!")
+
     async def _compute_derived_symmetric_key(self, secret, reg_id):
         # pylint: disable=no-member
         try:
             secret = base64.b64decode(secret)
         except:
             await self._logger.debug("ERROR: broken base64 secret => `" + secret + "`")
-            sys.exit()
+            sys.exit(2)
 
         return base64.b64encode(
             hmac.new(

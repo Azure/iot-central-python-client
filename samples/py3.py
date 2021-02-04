@@ -93,7 +93,20 @@ async def telemetry_loop():
 async def main():
     await client.connect()
     await client.send_property({"writeableProp": 50})
-    await client.run_telemetry_loop(telemetry_loop)
+    # await client.run_telemetry_loop(telemetry_loop)
+    while client.is_connected():
+        await client.send_telemetry(
+            {
+                "acceleration": {
+                    "x": str(randint(20, 45)),
+                    "y": str(randint(20, 45)),
+                    "z": str(randint(20, 45)),
+                }
+            }
+        )
+        await asyncio.sleep(3)
     
-
-asyncio.run(main())
+try:
+    asyncio.run(main())
+except asyncio.CancelledError:
+    pass

@@ -9,7 +9,10 @@ from azure.iot.device import Message, MethodResponse
 from datetime import datetime
 from .models import Command, CredentialsCache, Storage, GracefulExit
 
-__version__ = pkg_resources.get_distribution("iotc").version
+try:
+    __version__ = pkg_resources.get_distribution("iotc").version
+except:
+    pass
 
 if sys.version_info[0] < 3:
     import urllib
