@@ -19,4 +19,5 @@ dist
 Include/
 Lib/
 Scripts/
+bin/
 pyvenv.cfg
