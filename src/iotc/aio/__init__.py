@@ -93,7 +93,7 @@ class IoTCClient(AbstractClient):
     def raise_graceful_exit(self, *args):
         print("Shutting down...")
         raise GracefulExit
-        
+
     async def _handle_property_ack(
         self,
         callback,
@@ -248,9 +248,25 @@ class IoTCClient(AbstractClient):
                 continue
             # Wait for unknown method calls
             c2d = await self._device_client.receive_message()
-            c2d_name = c2d.custom_properties["method-name"].split(":")[1]
-            await self._logger.debug("Received enqueued command {}".format(c2d_name))
-            await enqueued_cmd_cb(c2d_name, c2d.data)
+            c2d_name = c2d.custom_properties["method-name"]
+            command = Command(c2d_name, c2d.data)
+            try:
+                command_name_with_components = c2d_name.split("*")
+
+                if len(command_name_with_components) > 1:
+                    # In a component
+                    await self._logger.debug("Command in a component")
+                    command = Command(
+                        command_name_with_components[1],
+                        c2d.data,
+                        command_name_with_components[0],
+                    )
+            except:
+                pass
+
+            await self._logger.debug("Received offline command {}".format(command.name))
+
+            await enqueued_cmd_cb(command)
 
     async def _send_message(self, payload, properties):
         msg = self._prepare_message(payload, properties)
@@ -387,14 +403,8 @@ class IoTCClient(AbstractClient):
 
     async def run_telemetry_loop(self, telemetry_loop):
         self._telemetry_loop = asyncio.create_task(telemetry_loop())
-        signal.signal(
-            signal.SIGINT,
-            self.raise_graceful_exit
-        )
-        signal.signal(
-            signal.SIGTERM,
-            self.raise_graceful_exit
-        )
+        signal.signal(signal.SIGINT, self.raise_graceful_exit)
+        signal.signal(signal.SIGTERM, self.raise_graceful_exit)
         try:
             self._telemetry_loop.add_done_callback(self.raise_graceful_exit)
             await asyncio.gather(
@@ -408,7 +418,7 @@ class IoTCClient(AbstractClient):
         finally:
             await self._logger.info("Received shutdown signal!")
             await self._logger.info("Disconnecting client...")
-            await self._device_client.disconnect()
+            # await self._device_client.disconnect()
             await self._logger.info("Client disconnected.")
             await self._logger.info("See you!")
 
