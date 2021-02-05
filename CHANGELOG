@@ -1,10 +1,12 @@
 1.1.0 (2021-02-05)
 -----------------
+- dropped Python 2.7 support (client should continue to work without tests)
 - added DTDLv2 Support (with components)
 - added graceful shutdown
 - added credentials cache
 - added device twin synchronization at boot
 - improved tests and coverage
+
 
 1.0.4 (2020-10-07)
 ------------------
