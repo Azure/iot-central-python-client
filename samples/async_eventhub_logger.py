@@ -21,20 +21,51 @@ from iotc import (
 )
 from iotc.aio import IoTCClient
 
+class EventHubLogger:
+    def __init__(self, conn_str, eventhub_name):
+        self._producer = EventHubProducerClient.from_connection_string(conn_str, eventhub_name=eventhub_name)
+
+    async def _create_batch(self):
+        self._event_data_batch = await self._producer.create_batch()
+
+    async def _log(self, message):
+        event_data_batch = await self._producer.create_batch()
+        event_data_batch.add(EventData(message))
+        await self._producer.send_batch(event_data_batch)
+
+    async def info(self, message):
+        if self._log_level != IOTCLogLevel.IOTC_LOGGING_DISABLED:
+            await self._log(message)
+
+    async def debug(self, message):
+        if self._log_level == IOTCLogLevel.IOTC_LOGGING_ALL:
+            await self._log(message)
+
+    def set_log_level(self, log_level):
+        self._log_level = log_level
+
+
+
 device_id = config["DEVICE_M3"]["DeviceId"]
 scope_id = config["DEVICE_M3"]["ScopeId"]
 key = config["DEVICE_M3"]["DeviceKey"]
+hub_name = config["DEVICE_M3"]["HubName"]
+
+event_hub_conn_str = config['EventHub']['ConnectionString']
+event_hub_name = config['EventHub']['EventHubName']
+
 
 
 class MemStorage(Storage):
     def retrieve(self):
         return CredentialsCache(
-            "iotc-1f9e162c-eacc-408d-9fb2-c9926a071037.azure-devices.net",
-            "javasdkcomponents2",
+            hub_name,
+            device_id,
             key,
         )
 
     def persist(self, credentials):
+        # a further option would be updating config file with latest hub name
         return None
 
 
@@ -65,6 +96,7 @@ client = IoTCClient(
     scope_id,
     IOTCConnectType.IOTC_CONNECT_DEVICE_KEY,
     key,
+    logger=EventHubLogger(event_hub_conn_str,event_hub_name)
     storage=MemStorage(),
 )
 if model_id != None:
@@ -75,25 +107,9 @@ client.on(IOTCEvents.IOTC_PROPERTIES, on_props)
 client.on(IOTCEvents.IOTC_COMMAND, on_commands)
 client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, on_enqueued_commands)
 
-# iotc.setQosLevel(IOTQosLevel.IOTC_QOS_AT_MOST_ONCE)
-
-async def telemetry_loop():
-    while client.is_connected():
-        await client.send_telemetry(
-            {
-                "acceleration": {
-                    "x": str(randint(20, 45)),
-                    "y": str(randint(20, 45)),
-                    "z": str(randint(20, 45)),
-                }
-            }
-        )
-        await asyncio.sleep(3)
-
 async def main():
     await client.connect()
     await client.send_property({"writeableProp": 50})
-    # await client.run_telemetry_loop(telemetry_loop)
     
     while client.is_connected():
         print("client connected {}".format(client._device_client.connected))
@@ -107,6 +123,5 @@ async def main():
             }
         )
         await asyncio.sleep(3)
-        # await client.disconnect()
 
 asyncio.run(main())

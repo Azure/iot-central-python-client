@@ -10,7 +10,7 @@ if config["TESTS"].getboolean("Local"):
     sys.path.insert(0, "src")
 
 from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents,IoTCClient
-from shared import dummy_storage
+from iotc.test import dummy_storage
 
 def init_compute_key_tests(mocker, key_type, key, device_id):
     client = IoTCClient(
@@ -20,13 +20,13 @@ def init_compute_key_tests(mocker, key_type, key, device_id):
         key,
     )
     spy = mocker.spy(client, "_compute_derived_symmetric_key")
-    ProvisioningClient = mocker.patch("iotc.aio.ProvisioningDeviceClient")
-    DeviceClient = mocker.patch("iotc.aio.IoTHubDeviceClient")
-    provisioning_client_instance = mocker.AsyncMock()
+    ProvisioningClient = mocker.patch("iotc.ProvisioningDeviceClient")
+    DeviceClient = mocker.patch("iotc.IoTHubDeviceClient")
+    provisioning_client_instance = mocker.MagicMock()
     ProvisioningClient.create_from_symmetric_key.return_value = (
         provisioning_client_instance
     )
-    DeviceClient.create_from_connection_string.return_value = mocker.AsyncMock()
+    DeviceClient.create_from_connection_string.return_value = mocker.MagicMock()
     client.connect()
     return spy
 

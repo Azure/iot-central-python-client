@@ -1,7 +1,7 @@
 import pytest
-import asyncio
 import configparser
 import os
+import time
 import sys
 
 config = configparser.ConfigParser()
@@ -11,8 +11,7 @@ if config["TESTS"].getboolean("Local"):
     sys.path.insert(0, "src")
 
 from azure.iot.device import MethodRequest, Message
-from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents, Command
-from iotc.aio import IoTCClient
+from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents, IoTCClient,Command
 from iotc.test import dummy_storage
 
 
@@ -50,16 +49,14 @@ def command_equals(self, other):
 
 Command.__eq__ = command_equals
 
-
 @pytest.fixture()
-@pytest.mark.asyncio
-async def iotc_client(mocker):
-    ProvisioningClient = mocker.patch("iotc.aio.ProvisioningDeviceClient")
-    DeviceClient = mocker.patch("iotc.aio.IoTHubDeviceClient")
-    ProvisioningClient.create_from_symmetric_key.return_value = mocker.AsyncMock()
+def iotc_client(mocker):
+    ProvisioningClient = mocker.patch("iotc.ProvisioningDeviceClient")
+    DeviceClient = mocker.patch("iotc.IoTHubDeviceClient")
+    ProvisioningClient.create_from_symmetric_key.return_value = mocker.MagicMock()
     device_client_instance = (
         DeviceClient.create_from_connection_string.return_value
-    ) = mocker.AsyncMock()
+    ) = mocker.MagicMock()
     mocked_client = IoTCClient(
         "device_id",
         "scope_id",
@@ -70,93 +67,92 @@ async def iotc_client(mocker):
     mocked_client._device_client = device_client_instance
     yield mocked_client
     try:
-        await mocked_client.disconnect()
+        mocked_client.disconnect()
     except asyncio.CancelledError:
         pass
 
 
-@pytest.mark.asyncio
-async def test_on_properties_triggered(mocker, iotc_client):
-    prop_stub = mocker.AsyncMock()
+def test_on_properties_triggered(mocker, iotc_client):
+    prop_stub = mocker.MagicMock()
     iotc_client.on(IOTCEvents.IOTC_PROPERTIES, prop_stub)
     iotc_client._device_client.receive_twin_desired_properties_patch.return_value = (
         DEFAULT_COMPONENT_PROP
     )
-    await iotc_client.connect()
-    await asyncio.sleep(0.1)
+    iotc_client.connect()
+    time.sleep(0.1)
     prop_stub.assert_called_with("prop1", "value1", None)
 
 
-@pytest.mark.asyncio
-async def test_on_properties_triggered_with_component(mocker, iotc_client):
-    prop_stub = mocker.AsyncMock()
+
+def test_on_properties_triggered_with_component(mocker, iotc_client):
+    prop_stub = mocker.MagicMock()
     # set return value, otherwise a check for the function result will execute a mock again
     prop_stub.return_value = True
     iotc_client.on(IOTCEvents.IOTC_PROPERTIES, prop_stub)
     iotc_client._device_client.receive_twin_desired_properties_patch.return_value = (
         COMPONENT_PROP
     )
-    await iotc_client.connect()
-    await asyncio.sleep(0.1)
+    iotc_client.connect()
+    time.sleep(0.1)
     prop_stub.assert_called_with("prop1", "value1", "component1")
 
 
-@pytest.mark.asyncio
-async def test_on_properties_triggered_with_complex_component(mocker, iotc_client):
-    prop_stub = mocker.AsyncMock()
+
+def test_on_properties_triggered_with_complex_component(mocker, iotc_client):
+    prop_stub = mocker.MagicMock()
     # set return value, otherwise a check for the function result will execute a mock again
     prop_stub.return_value = True
     iotc_client.on(IOTCEvents.IOTC_PROPERTIES, prop_stub)
     iotc_client._device_client.receive_twin_desired_properties_patch.return_value = (
         COMPLEX_COMPONENT_PROP
     )
-    await iotc_client.connect()
-    await asyncio.sleep(0.1)
+    iotc_client.connect()
+    time.sleep(0.1)
     prop_stub.assert_has_calls(
         [
             mocker.call("prop1", "value1", "component1"),
             mocker.call("prop1", "value1", "component2"),
             mocker.call("prop2", "value2", "component2"),
             mocker.call("prop2", "value2", None),
-        ]
+        ],any_order=True
     )
 
 
-@pytest.mark.asyncio
-async def test_on_command_triggered(mocker, iotc_client):
-    cmd_stub = mocker.AsyncMock()
+
+def test_on_command_triggered(mocker, iotc_client):
+    cmd_stub = mocker.MagicMock()
     iotc_client.on(IOTCEvents.IOTC_COMMAND, cmd_stub)
     iotc_client._device_client.receive_method_request.return_value = DEFAULT_COMMAND
-    await iotc_client.connect()
-    await asyncio.sleep(0.1)
+    iotc_client.connect()
+    time.sleep(0.1)
     cmd_stub.assert_called_with(Command("cmd1", "sample", None))
 
 
-@pytest.mark.asyncio
-async def test_on_command_triggered_with_component(mocker, iotc_client):
-    cmd_stub = mocker.AsyncMock()
+
+def test_on_command_triggered_with_component(mocker, iotc_client):
+    cmd_stub = mocker.MagicMock()
     iotc_client.on(IOTCEvents.IOTC_COMMAND, cmd_stub)
     iotc_client._device_client.receive_method_request.return_value = COMPONENT_COMMAND
-    await iotc_client.connect()
-    await asyncio.sleep(0.1)
+    iotc_client.connect()
+    time.sleep(0.1)
     cmd_stub.assert_called_with(Command("cmd1", "sample", "commandComponent"))
 
 
-@pytest.mark.asyncio
-async def test_on_enqueued_command_triggered(mocker, iotc_client):
-    cmd_stub = mocker.AsyncMock()
+
+def test_on_enqueued_command_triggered(mocker, iotc_client):
+    cmd_stub = mocker.MagicMock()
     iotc_client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, cmd_stub)
     iotc_client._device_client.receive_message.return_value = DEFAULT_COMPONENT_ENQUEUED
-    await iotc_client.connect()
-    await asyncio.sleep(0.1)
+    iotc_client.connect()
+    time.sleep(0.1)
     cmd_stub.assert_called_with(Command("command_name", "sample_data", None))
 
 
-@pytest.mark.asyncio
-async def test_on_enqueued_command_triggered_with_component(mocker, iotc_client):
-    cmd_stub = mocker.AsyncMock()
+
+def test_on_enqueued_command_triggered_with_component(mocker, iotc_client):
+    cmd_stub = mocker.MagicMock()
     iotc_client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, cmd_stub)
     iotc_client._device_client.receive_message.return_value = COMPONENT_ENQUEUED
-    await iotc_client.connect()
-    await asyncio.sleep(0.1)
+    iotc_client.connect()
+    time.sleep(0.1)
     cmd_stub.assert_called_with(Command("command_name", "sample_data", "component"))

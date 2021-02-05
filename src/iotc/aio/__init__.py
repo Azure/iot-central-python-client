@@ -416,6 +416,10 @@ class IoTCClient(AbstractClient):
                     _credentials.connection_string
                 )
             else:
+                if 'cert_phrase' in _credentials.certificate:
+                    x509 = X509(_credentials.certificate['cert_file'], _credentials.certificate['key_file'], _credentials.certificate['cert_phrase'])
+                else:
+                    x509 = X509(_credentials.certificate['cert_file'], _credentials.certificate['key_file'])
                 self._device_client = IoTHubDeviceClient.create_from_x509_certificate(
                     x509=x509,
                     hostname=_credentials.hub_name,

@@ -12,7 +12,8 @@ if config["TESTS"].getboolean("Local"):
 
 from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents
 from iotc.aio import IoTCClient
-from iotc.test import stop, dummy_storage
+from iotc.test import dummy_storage
+
 
 @pytest.mark.asyncio
 async def init_compute_key_tests(mocker, key_type, key, device_id):
@@ -31,7 +32,7 @@ async def init_compute_key_tests(mocker, key_type, key, device_id):
     )
     DeviceClient.create_from_connection_string.return_value = mocker.AsyncMock()
     await client.connect()
-    await stop()
+    await client.disconnect()
     return spy
 
 
@@ -46,6 +47,7 @@ async def test_compute_device_key_success(mocker):
     )
     spy.assert_called_once_with(group_key, device_id)
     assert spy.spy_return == device_key
+
 
 @pytest.mark.asyncio
 async def test_compute_device_key_skip(mocker):

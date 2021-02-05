@@ -34,17 +34,17 @@ These clients are available with an asynchronous API, as well as a blocking sync
 ## Samples
 Check out the [sample repository](samples) for example code showing how the SDK can be used in the various scenarios:
 
-*   [py3](samples/py3.py) - Sending telemetry and receiving properties and commands with device connected through **symmetric key** (Python 3.7+)
-*   [py3_x509](samples/py3_x509.py) - Sending telemetry and receiving properties and commands with device connected through **x509 certificates** (Python 3.7+)
-*   [py3_file_logger](samples/py3_file_logger.py) - Print logs on file with rotation (Python 3.7+)
-*   [py3_eventhub_logger](samples/py3_eventhub_logger.py) - Redirect logs to Azure Event Hub (Python 3.7+)
+*   [async_device_key](samples/async_device_key) - Sending telemetry and receiving properties and commands with device connected through **symmetric key** (Python 3.7+)
+*   [async_x509](samples/async_x509.py) - Sending telemetry and receiving properties and commands with device connected through **x509 certificates** (Python 3.7+)
+*   [async_file_logger](samples/async_file_logger.py) - Print logs on file with rotation (Python 3.7+)
+*   [async_eventhub_logger](samples/async_eventhub_logger.py) - Redirect logs to Azure Event Hub (Python 3.7+)
 
 
 **The following samples are legacy samples**, they work with the sycnhronous API intended for use with Python 2.7, or in compatibility scenarios with later versions. We recommend you use the asynchronous API and Python3 samples above instead.
 
 
-*   [py2](samples/py2.py) - Sending telemetry and receiving properties and commands with device connected through **symmetric key** (Python 2.7+)
-*   [py2_x509](samples/py2_x509.py) - Sending telemetry and receiving properties and commands with device connected through **x509 certificates** (Python 2.7+)
+*   [sync_device_key](samples/sync_device_key.py) - Sending telemetry and receiving properties and commands with device connected through **symmetric key** (Python 2.7+)
+*   [sync_x509](samples/sync_x509.py) - Sending telemetry and receiving properties and commands with device connected through **x509 certificates** (Python 2.7+)
 
 
 Samples by default parse a configuration file including required credentials. Just create a file called **samples.ini** inside the _samples_ folder with a content like this:
