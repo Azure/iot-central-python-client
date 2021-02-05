@@ -66,7 +66,6 @@ async def iotc_client(mocker):
         IOTCConnectType.IOTC_CONNECT_DEVICE_KEY,
         "device_key_base64",
     )
-    mocked_client.set_log_level(IOTCLogLevel.IOTC_LOGGING_ALL)
     mocked_client._device_client = device_client_instance
     yield mocked_client
     try:
