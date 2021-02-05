@@ -12,6 +12,8 @@ from .. import (
     Storage,
     GracefulExit,
 )
+from contextlib import suppress
+from azure.iot.device.common.transport_exceptions import ConnectionDroppedError
 from azure.iot.device import X509, MethodResponse, Message
 from azure.iot.device.aio import IoTHubDeviceClient, ProvisioningDeviceClient
 
@@ -154,7 +156,10 @@ class IoTCClient(AbstractClient):
                 # await self._logger.debug("Properties callback not found")
                 await asyncio.sleep(0.1)
                 continue
-            patch = await self._device_client.receive_twin_desired_properties_patch()
+            try:
+                patch = await self._device_client.receive_twin_desired_properties_patch()
+            except asyncio.CancelledError:
+                return
             await self._logger.debug("Received desired properties. {}".format(patch))
 
             for prop in patch:
@@ -165,12 +170,12 @@ class IoTCClient(AbstractClient):
                 # check if component
                 try:
                     is_component = patch[prop]["__t"]
-                    del patch[prop]["__t"]
                 except KeyError:
                     pass
-
                 if is_component:
                     for component_prop in patch[prop]:
+                        if component_prop == "__t":
+                            continue
                         await self._logger.debug(
                             'In component "{}" for property "{}"'.format(
                                 prop, component_prop
@@ -216,7 +221,10 @@ class IoTCClient(AbstractClient):
                 await asyncio.sleep(0.1)
                 continue
             # Wait for unknown method calls
-            method_request = await self._device_client.receive_method_request()
+            try:
+                method_request = await self._device_client.receive_method_request()
+            except asyncio.CancelledError:
+                return
             command = Command(method_request.name, method_request.payload)
             command_name_with_components = method_request.name.split("*")
 
@@ -262,7 +270,10 @@ class IoTCClient(AbstractClient):
                 await asyncio.sleep(0.1)
                 continue
             # Wait for unknown method calls
-            c2d = await self._device_client.receive_message()
+            try:
+                c2d = await self._device_client.receive_message()
+            except asyncio.CancelledError:
+                return
             c2d_name = c2d.custom_properties["method-name"]
             command = Command(c2d_name, c2d.data)
             try:
@@ -421,50 +432,27 @@ class IoTCClient(AbstractClient):
         signal.signal(signal.SIGINT, self.raise_graceful_exit)
         signal.signal(signal.SIGTERM, self.raise_graceful_exit)
 
-    async def run_telemetry_loop(self, telemetry_loop):
-        self._telemetry_loop = asyncio.create_task(telemetry_loop())
-        signal.signal(signal.SIGINT, asyncio.create_task(self.raise_graceful_exit))
-        signal.signal(signal.SIGTERM, asyncio.create_task(self.raise_graceful_exit))
-        try:
-            # self._telemetry_loop.add_done_callback(self.raise_graceful_exit)
-            await asyncio.gather(
-                self._prop_thread,
-                self._cmd_thread,
-                self._enqueued_cmd_thread,
-                self._telemetry_loop,
-            )
-        except GracefulExit:
-            pass
-        finally:
-            await self._logger.info("Received shutdown signal!")
-            await self._logger.info("Disconnecting client...")
-            # await self._device_client.disconnect()
-            await self._logger.info("Client disconnected.")
-            await self._logger.info("See you!")
-
     async def disconnect(self):
         global terminate
-        terminate = True
-        if self._prop_thread is not None and self._cmd_thread is not None and self._enqueued_cmd_thread is not None:
+        if (
+            self._prop_thread is not None
+            and self._cmd_thread is not None
+            and self._enqueued_cmd_thread is not None
+        ):
             tasks = asyncio.gather(
-                self._prop_thread,
-                self._cmd_thread,
-                self._enqueued_cmd_thread,
+                self._prop_thread, self._cmd_thread, self._enqueued_cmd_thread
             )
-            try:
-                for task in tasks:
-                    try:
-                        task.cancel()
-                    except:
-                        pass
-                with suppress(asyncio.CancelledError):
-                    await tasks
-            except:
-                pass
+        terminate = True
+        try:
+            tasks.cancel()
+            await tasks
+        except:
+            pass
         await self._logger.info("Disconnecting client...")
-        await self._device_client.disconnect()
         await self._logger.info("Client disconnected.")
         await self._logger.info("See you!")
+        await self._device_client.disconnect()
+        
 
     async def _compute_derived_symmetric_key(self, secret, reg_id):
         # pylint: disable=no-member
