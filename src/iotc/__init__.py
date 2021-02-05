@@ -1,5 +1,6 @@
 import sys
 import threading
+import signal
 import time
 import pkg_resources
 from azure.iot.device import X509
@@ -107,6 +108,9 @@ class ConsoleLogger:
         self._log_level = log_level
 
 
+terminate = False
+
+
 class AbstractClient:
     def __init__(self, device_id, scope_id, cred_type, key_or_cert, storage=None):
         self._device_id = device_id
@@ -122,6 +126,7 @@ class AbstractClient:
         self._content_encoding = "utf-8"
         self._global_endpoint = "global.azure-devices-provisioning.net"
         self._storage = storage
+        self._terminate = False
 
     def is_connected(self):
         """
@@ -129,11 +134,7 @@ class AbstractClient:
         :returns: Connection state
         :rtype: bool
         """
-        if not self._device_client:
-            print(
-                "ERROR: A connection was never attempted. You need to first call connect() before querying the connection state"
-            )
-        else:
+        if self._device_client:
             return self._device_client.connected
 
     def set_global_endpoint(self, endpoint):
@@ -164,7 +165,8 @@ class AbstractClient:
         self._content_encoding = content_encoding
 
     def _prepare_message(self, payload, properties):
-        msg = Message(payload, uuid.uuid4(), self._content_encoding, self._content_type)
+        msg = Message(payload, uuid.uuid4(),
+                      self._content_encoding, self._content_type)
         if bool(properties):
             for prop in properties:
                 msg.custom_properties[prop] = properties[prop]
@@ -178,6 +180,49 @@ class AbstractClient:
         """
         self._events[eventname] = callback
         return 0
+    
+    def _sync_twin(self):
+        try:
+            desired = self._twin['desired']
+            desired_version = self._twin['desired']['$version']
+        except KeyError:
+            return
+        try:
+            reported = self._twin['reported']
+        except KeyError:
+            return
+        patch = {}
+        for desired_prop in desired:
+            if desired_prop == '$version':
+                continue
+            if '__t' in desired[desired_prop]:  # is a component
+                desired_prop_component = desired_prop
+                for desired_prop_name in desired[desired_prop_component]:
+                    if desired_prop_name == '__t':
+                        continue
+                    has_reported = False
+                    try:
+                        has_reported = reported[desired_prop_component][desired_prop_name]
+                    except KeyError:
+                        pass
+                    # desired is more recent
+                    if has_reported and 'av' in has_reported and has_reported['av'] < desired_version:
+                        patch[desired_prop_component] = desired[desired_prop_component]
+            else:  # default component
+                has_reported = False
+                try:
+                    has_reported = reported[desired_prop]
+                except KeyError:
+                    pass
+                # desired is more recent
+                if has_reported and 'av' in has_reported and has_reported['av'] < desired_version:
+                    patch[desired_prop] = desired[desired_prop]
+
+        if patch:  # there are desired to ack
+            patch['$version'] = desired_version
+            return patch
+        else:
+            return None
 
 
 class IoTCClient(AbstractClient):
@@ -211,7 +256,10 @@ class IoTCClient(AbstractClient):
         property_version,
         component_name=None,
     ):
-        ret = callback(property_name, property_value, component_name)
+        if callback is not None:
+            ret = callback(property_name, property_value, component_name)
+        else:
+            ret = True
         if ret:
             if component_name is not None:
                 self._logger.debug("Acknowledging {}".format(property_name))
@@ -244,49 +292,53 @@ class IoTCClient(AbstractClient):
                 'Property "{}" unsuccessfully processed'.format(property_name)
             )
 
+    def _update_properties(self, patch, prop_cb):
+        for prop in patch:
+            is_component = False
+            if prop == "$version":
+                continue
+
+            # check if component
+            try:
+                is_component = patch[prop]["__t"]
+            except KeyError:
+                pass
+            if is_component:
+                for component_prop in patch[prop]:
+                    if component_prop == "__t":
+                        continue
+                    self._logger.debug(
+                        'In component "{}" for property "{}"'.format(
+                            prop, component_prop
+                        )
+                    )
+                    self._handle_property_ack(
+                        prop_cb,
+                        component_prop,
+                        patch[prop][component_prop]["value"],
+                        patch["$version"],
+                        prop,
+                    )
+            else:
+                self._handle_property_ack(
+                    prop_cb, prop, patch[prop]["value"], patch["$version"]
+                )
+
     def _on_properties(self):
         self._logger.debug("Setup properties listener.")
-        while True:
+        while not self._terminate:
             try:
                 prop_cb = self._events[IOTCEvents.IOTC_PROPERTIES]
             except KeyError:
-                self._logger.debug("Properties callback not found")
-                time.sleep(10)
+                time.sleep(0.1)
                 continue
-
             patch = self._device_client.receive_twin_desired_properties_patch()
-            self._logger.debug("\nReceived desired properties. {}\n".format(patch))
+            self._logger.debug("Received desired properties. {}".format(patch))
 
-            for prop in patch:
-                is_component = False
-                if prop == "$version":
-                    continue
+            self._update_properties(patch, prop_cb)
+            time.sleep(0.1)
 
-                # check if component
-                try:
-                    is_component = patch[prop]["__t"]
-                    del patch[prop]["__t"]
-                except KeyError:
-                    pass
-
-                if is_component:
-                    for component_prop in patch[prop]:
-                        self._logger.debug(
-                            'In component "{}" for property "{}"'.format(
-                                prop, component_prop
-                            )
-                        )
-                        self._handle_property_ack(
-                            prop_cb,
-                            component_prop,
-                            patch[prop][component_prop]["value"],
-                            patch["$version"],
-                            prop,
-                        )
-                else:
-                    self._handle_property_ack(
-                        prop_cb, prop, patch[prop]["value"], patch["$version"]
-                    )
+        self._logger.debug("Stopping properties listener...")
 
     def _cmd_ack(self, name, value, request_id, component_name=None):
         if component_name is not None:
@@ -304,19 +356,21 @@ class IoTCClient(AbstractClient):
 
     def _on_commands(self):
         self._logger.debug("Setup commands listener")
-        while True:
+        while not self._terminate:
             try:
                 cmd_cb = self._events[IOTCEvents.IOTC_COMMAND]
             except KeyError:
-                self._logger.debug("Commands callback not found")
-                time.sleep(10)
+                time.sleep(0.1)
                 continue
             # Wait for unknown method calls
             method_request = self._device_client.receive_method_request()
+
             command = Command(method_request.name, method_request.payload)
             command_name_with_components = method_request.name.split("*")
+
             if len(command_name_with_components) > 1:
                 # In a component
+                self._logger.debug("Command in a component")
                 command = Command(
                     command_name_with_components[1],
                     method_request.payload,
@@ -340,24 +394,44 @@ class IoTCClient(AbstractClient):
 
             command.reply = reply_fn
             self._logger.debug(
-                "Received command {} with value {}".format(command.name, command.value)
-            )
+                "Received command {}".format(method_request.name))
+
             cmd_cb(command)
+            time.sleep(0.1)
+        self._logger.debug("Stopping commands listener...")
 
     def _on_enqueued_commands(self):
         self._logger.debug("Setup enqueued commands listener")
-        while True:
+        while not self._terminate:
             try:
                 enqueued_cmd_cb = self._events[IOTCEvents.IOTC_ENQUEUED_COMMAND]
             except KeyError:
-                self._logger.debug("Enqueued commands callback not found")
-                time.sleep(10)
+                time.sleep(0.1)
                 continue
             # Wait for unknown method calls
             c2d = self._device_client.receive_message()
-            c2d_name = c2d.custom_properties["method-name"].split(":")[1]
-            self._logger.debug("Received enqueued command {}".format(c2d_name))
-            enqueued_cmd_cb(c2d_name, c2d.data)
+            c2d_name = c2d.custom_properties["method-name"]
+            command = Command(c2d_name, c2d.data)
+            try:
+                command_name_with_components = c2d_name.split("*")
+
+                if len(command_name_with_components) > 1:
+                    # In a component
+                    self._logger.debug("Command in a component")
+                    command = Command(
+                        command_name_with_components[1],
+                        c2d.data,
+                        command_name_with_components[0],
+                    )
+            except:
+                pass
+
+            self._logger.debug(
+                "Received offline command {}".format(command.name))
+
+            enqueued_cmd_cb(command)
+            time.sleep(0.1)
+        self._logger.debug("Stopping enqueued commands listener...")
 
     def _send_message(self, payload, properties):
         msg = self._prepare_message(payload, properties)
@@ -385,6 +459,7 @@ class IoTCClient(AbstractClient):
         Connects the device.
         :raises exception: If connection fails
         """
+        self._terminate = False
         _credentials = None
 
         if self._storage is not None and force_dps is False:
@@ -400,7 +475,8 @@ class IoTCClient(AbstractClient):
                     self._key_or_cert = self._compute_derived_symmetric_key(
                         self._key_or_cert, self._device_id
                     )
-                    self._logger.debug("Device key: {}".format(self._key_or_cert))
+                    self._logger.debug(
+                        "Device key: {}".format(self._key_or_cert))
 
                 self._provisioning_client = (
                     ProvisioningDeviceClient.create_from_symmetric_key(
@@ -415,7 +491,8 @@ class IoTCClient(AbstractClient):
                 self._cert_file = self._key_or_cert["cert_file"]
                 try:
                     self._cert_phrase = self._key_or_cert["cert_phrase"]
-                    x509 = X509(self._cert_file, self._key_file, self._cert_phrase)
+                    x509 = X509(self._cert_file, self._key_file,
+                                self._cert_phrase)
                 except:
                     self._logger.debug(
                         "No passphrase available for certificate. Trying without it"
@@ -484,6 +561,11 @@ class IoTCClient(AbstractClient):
                 )
             self._device_client.connect()
             self._logger.debug("Device connected")
+            self._twin = self._device_client.get_twin()
+            self._logger.debug("Current twin: {}".format(self._twin))
+            prop_patch = self._sync_twin()
+            if prop_patch is not None:
+                self._update_properties(prop_patch, None)
         except:
             t, v, tb = sys.exc_info()
             self._logger.info("ERROR: Failed to connect to Hub")
@@ -501,16 +583,31 @@ class IoTCClient(AbstractClient):
         self._cmd_thread.daemon = True
         self._cmd_thread.start()
 
-        self._enqueued_cmd_thread = threading.Thread(target=self._on_enqueued_commands)
+        self._enqueued_cmd_thread = threading.Thread(
+            target=self._on_enqueued_commands)
         self._enqueued_cmd_thread.daemon = True
         self._enqueued_cmd_thread.start()
+
+        signal.signal(signal.SIGINT, self.disconnect)
+        signal.signal(signal.SIGTERM, self.disconnect)
+
+    def disconnect(self, *args):
+        self._logger.info("Received shutdown signal")
+        self._terminate = True
+
+        self._device_client.shutdown()
+        self._logger.info("Disconnecting client...")
+        self._logger.info("Client disconnected.")
+        self._logger.info("See you!")
+
 
     def _compute_derived_symmetric_key(self, secret, reg_id):
         # pylint: disable=no-member
         try:
             secret = base64.b64decode(secret)
         except:
-            self._logger.debug("ERROR: broken base64 secret => `" + secret + "`")
+            self._logger.debug(
+                "ERROR: broken base64 secret => `" + secret + "`")
             sys.exit()
 
         return base64.b64encode(

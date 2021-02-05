@@ -12,7 +12,7 @@ if config["TESTS"].getboolean("Local"):
 
 from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents
 from iotc.aio import IoTCClient
-from shared import stop, dummy_storage
+from iotc.test import stop, dummy_storage
 
 @pytest.mark.asyncio
 async def init_compute_key_tests(mocker, key_type, key, device_id):

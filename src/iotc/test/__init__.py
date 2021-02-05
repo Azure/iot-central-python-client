@@ -1,11 +1,9 @@
-import asyncio
-
-
 async def empty_fn():
     pass
 
 
 async def stop():
+    import asyncio
     for task in asyncio.all_tasks():
         task.cancel()
         try:

@@ -21,7 +21,7 @@ try:
     __version__ = pkg_resources.get_distribution("iotc").version
 except:
     pass
-terminate = False
+
 
 try:
     import hmac
@@ -101,7 +101,9 @@ class IoTCClient(AbstractClient):
             await self.disconnect()
 
         try:
-            asyncio.create_task(handle_disconnection())
+            asyncio.run_coroutine_threadsafe(
+                handle_disconnection(), asyncio.get_event_loop()
+            )
         except:
             pass
 
@@ -113,7 +115,10 @@ class IoTCClient(AbstractClient):
         property_version,
         component_name=None,
     ):
-        ret = await callback(property_name, property_value, component_name)
+        if callback is not None:
+            ret = await callback(property_name, property_value, component_name)
+        else:
+            ret = True
         if ret:
             if component_name is not None:
                 await self._logger.debug("Acknowledging {}".format(property_name))
@@ -146,10 +151,41 @@ class IoTCClient(AbstractClient):
                 'Property "{}" unsuccessfully processed'.format(property_name)
             )
 
+    async def _update_properties(self, patch, prop_cb):
+        for prop in patch:
+            is_component = False
+            if prop == "$version":
+                continue
+
+            # check if component
+            try:
+                is_component = patch[prop]["__t"]
+            except KeyError:
+                pass
+            if is_component:
+                for component_prop in patch[prop]:
+                    if component_prop == "__t":
+                        continue
+                    await self._logger.debug(
+                        'In component "{}" for property "{}"'.format(
+                            prop, component_prop
+                        )
+                    )
+                    await self._handle_property_ack(
+                        prop_cb,
+                        component_prop,
+                        patch[prop][component_prop]["value"],
+                        patch["$version"],
+                        prop,
+                    )
+            else:
+                await self._handle_property_ack(
+                    prop_cb, prop, patch[prop]["value"], patch["$version"]
+                )
+
     async def _on_properties(self):
-        global terminate
         await self._logger.debug("Setup properties listener")
-        while not terminate:
+        while not self._terminate:
             try:
                 prop_cb = self._events[IOTCEvents.IOTC_PROPERTIES]
             except KeyError:
@@ -157,41 +193,14 @@ class IoTCClient(AbstractClient):
                 await asyncio.sleep(0.1)
                 continue
             try:
-                patch = await self._device_client.receive_twin_desired_properties_patch()
+                patch = (
+                    await self._device_client.receive_twin_desired_properties_patch()
+                )
             except asyncio.CancelledError:
                 return
             await self._logger.debug("Received desired properties. {}".format(patch))
 
-            for prop in patch:
-                is_component = False
-                if prop == "$version":
-                    continue
-
-                # check if component
-                try:
-                    is_component = patch[prop]["__t"]
-                except KeyError:
-                    pass
-                if is_component:
-                    for component_prop in patch[prop]:
-                        if component_prop == "__t":
-                            continue
-                        await self._logger.debug(
-                            'In component "{}" for property "{}"'.format(
-                                prop, component_prop
-                            )
-                        )
-                        await self._handle_property_ack(
-                            prop_cb,
-                            component_prop,
-                            patch[prop][component_prop]["value"],
-                            patch["$version"],
-                            prop,
-                        )
-                else:
-                    await self._handle_property_ack(
-                        prop_cb, prop, patch[prop]["value"], patch["$version"]
-                    )
+            await self._update_properties(patch, prop_cb)
             await asyncio.sleep(0.1)
 
         await self._logger.debug("Stopping properties listener...")
@@ -212,8 +221,7 @@ class IoTCClient(AbstractClient):
 
     async def _on_commands(self):
         await self._logger.debug("Setup commands listener")
-        global terminate
-        while not terminate:
+        while not self._terminate:
             try:
                 cmd_cb = self._events[IOTCEvents.IOTC_COMMAND]
             except KeyError:
@@ -261,8 +269,7 @@ class IoTCClient(AbstractClient):
 
     async def _on_enqueued_commands(self):
         await self._logger.debug("Setup enqueued commands listener")
-        global terminate
-        while not terminate:
+        while not self._terminate:
             try:
                 enqueued_cmd_cb = self._events[IOTCEvents.IOTC_ENQUEUED_COMMAND]
             except KeyError:
@@ -322,8 +329,7 @@ class IoTCClient(AbstractClient):
         Connects the device.
         :raises exception: If connection fails
         """
-        global terminate
-        terminate = False
+        self._terminate = False
         _credentials = None
 
         if self._storage is not None and force_dps is False:
@@ -419,6 +425,9 @@ class IoTCClient(AbstractClient):
             await self._logger.debug("Device connected")
             self._twin = await self._device_client.get_twin()
             await self._logger.debug("Current twin: {}".format(self._twin))
+            twin_patch = self._sync_twin()
+            if twin_patch is not None:
+                await self._update_properties(twin_patch, None)
         except:
             await self._logger.info("ERROR: Failed to connect to Hub")
             if force_dps is True:
@@ -433,7 +442,7 @@ class IoTCClient(AbstractClient):
         signal.signal(signal.SIGTERM, self.raise_graceful_exit)
 
     async def disconnect(self):
-        global terminate
+        await self._logger.info("Received shutdown signal")
         if (
             self._prop_thread is not None
             and self._cmd_thread is not None
@@ -442,17 +451,16 @@ class IoTCClient(AbstractClient):
             tasks = asyncio.gather(
                 self._prop_thread, self._cmd_thread, self._enqueued_cmd_thread
             )
-        terminate = True
+        self._terminate = True
         try:
             tasks.cancel()
             await tasks
         except:
             pass
+        await self._device_client.shutdown()
         await self._logger.info("Disconnecting client...")
         await self._logger.info("Client disconnected.")
         await self._logger.info("See you!")
-        await self._device_client.disconnect()
-        
 
     async def _compute_derived_symmetric_key(self, secret, reg_id):
         # pylint: disable=no-member

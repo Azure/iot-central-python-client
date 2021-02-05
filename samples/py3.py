@@ -96,6 +96,7 @@ async def main():
     # await client.run_telemetry_loop(telemetry_loop)
     
     while client.is_connected():
+        print("client connected {}".format(client._device_client.connected))
         await client.send_telemetry(
             {
                 "acceleration": {
@@ -106,6 +107,6 @@ async def main():
             }
         )
         await asyncio.sleep(3)
-    print("Exiting")
+        # await client.disconnect()
 
 asyncio.run(main())

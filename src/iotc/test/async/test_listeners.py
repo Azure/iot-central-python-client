@@ -15,7 +15,7 @@ if config["TESTS"].getboolean("Local"):
 from azure.iot.device import MethodRequest, Message
 from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents, Command
 from iotc.aio import IoTCClient
-from shared import stop, dummy_storage
+from iotc.test import stop, dummy_storage
 
 
 DEFAULT_COMPONENT_PROP = {"prop1": {"value": "value1"}, "$version": 1}
@@ -128,6 +128,8 @@ async def test_on_properties_triggered(mocker, iotc_client):
 @pytest.mark.asyncio
 async def test_on_properties_triggered_with_component(mocker, iotc_client):
     prop_stub = mocker.AsyncMock()
+    # set return value, otherwise a check for the function result will execute a mock again
+    prop_stub.return_value = True
     iotc_client.on(IOTCEvents.IOTC_PROPERTIES, prop_stub)
     iotc_client._device_client.receive_twin_desired_properties_patch.return_value = (
         COMPONENT_PROP
