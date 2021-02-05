@@ -1,3 +1,11 @@
+1.1.0 (2021-02-05)
+-----------------
+- added DTDLv2 Support (with components)
+- added graceful shutdown
+- added credentials cache
+- added device twin synchronization at boot
+- improved tests and coverage
+
 1.0.4 (2020-10-07)
 ------------------
 - fix property report with value wrapped
