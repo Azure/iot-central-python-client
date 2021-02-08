@@ -234,16 +234,19 @@ class IoTCClient(AbstractClient):
             except asyncio.CancelledError:
                 return
             command = Command(method_request.name, method_request.payload)
-            command_name_with_components = method_request.name.split("*")
+            try:
+                command_name_with_components = method_request.name.split("*")
 
-            if len(command_name_with_components) > 1:
-                # In a component
-                await self._logger.debug("Command in a component")
-                command = Command(
-                    command_name_with_components[1],
-                    method_request.payload,
-                    command_name_with_components[0],
-                )
+                if len(command_name_with_components) > 1:
+                    # In a component
+                    await self._logger.debug("Command in a component")
+                    command = Command(
+                        command_name_with_components[1],
+                        method_request.payload,
+                        command_name_with_components[0],
+                    )
+            except:
+                pass
 
             async def reply_fn():
                 await self._device_client.send_method_response(
