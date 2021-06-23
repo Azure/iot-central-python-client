@@ -195,11 +195,9 @@ class AbstractClient:
         for desired_prop in desired:
             if desired_prop == '$version':
                 continue
-            if '__t' in desired[desired_prop]:  # is a component
+            if str(type(desired[desired_prop])) == "<class 'dict'>":  # is a component
                 desired_prop_component = desired_prop
                 for desired_prop_name in desired[desired_prop_component]:
-                    if desired_prop_name == '__t':
-                        continue
                     has_reported = False
                     try:
                         has_reported = reported[desired_prop_component][desired_prop_name]
@@ -268,7 +266,7 @@ class IoTCClient(AbstractClient):
                         "{}".format(component_name): {
                             "{}".format(property_name): {
                                 "ac": 200,
-                                "ad": "Property received",
+                                "ad": "Completed",
                                 "av": property_version,
                                 "value": property_value,
                             }
@@ -281,7 +279,7 @@ class IoTCClient(AbstractClient):
                     {
                         "{}".format(property_name): {
                             "ac": 200,
-                            "ad": "Property received",
+                            "ad": "Completed",
                             "av": property_version,
                             "value": property_value,
                         }

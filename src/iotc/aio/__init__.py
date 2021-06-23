@@ -125,12 +125,12 @@ class IoTCClient(AbstractClient):
                 await self.send_property(
                     {
                         "{}".format(component_name): {
-                            "{}".format(property_name): {
-                                "ac": 200,
-                                "ad": "Property received",
-                                "av": property_version,
-                                "value": property_value,
-                            }
+                            "value": {
+                                "{}".format(property_name): property_value
+                            },
+                            "ac": 200,
+                            "ad": "Completed",
+                            "av": property_version,
                         }
                     }
                 )
@@ -140,7 +140,7 @@ class IoTCClient(AbstractClient):
                     {
                         "{}".format(property_name): {
                             "ac": 200,
-                            "ad": "Property received",
+                            "ad": "Completed",
                             "av": property_version,
                             "value": property_value,
                         }
@@ -159,12 +159,12 @@ class IoTCClient(AbstractClient):
 
             # check if component
             try:
-                is_component = patch[prop]["__t"]
+                is_component = str(type(patch[prop])) == "<class 'dict'>"
             except KeyError:
                 pass
             if is_component:
                 for component_prop in patch[prop]:
-                    if component_prop == "__t":
+                    if str(type(component_prop)) == "<class 'dict'>":
                         continue
                     await self._logger.debug(
                         'In component "{}" for property "{}"'.format(
@@ -174,13 +174,13 @@ class IoTCClient(AbstractClient):
                     await self._handle_property_ack(
                         prop_cb,
                         component_prop,
-                        patch[prop][component_prop]["value"],
+                        patch[prop][component_prop],
                         patch["$version"],
                         prop,
                     )
             else:
                 await self._handle_property_ack(
-                    prop_cb, prop, patch[prop]["value"], patch["$version"]
+                    prop_cb, prop, patch[prop], patch["$version"]
                 )
 
     async def _on_properties(self):
