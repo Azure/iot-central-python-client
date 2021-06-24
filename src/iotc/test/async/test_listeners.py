@@ -16,19 +16,19 @@ from iotc.aio import IoTCClient
 from iotc.test import dummy_storage
 
 
-DEFAULT_COMPONENT_PROP = {"prop1": {"value": "value1"}, "$version": 1}
+DEFAULT_COMPONENT_PROP = {"prop1": "value1", "$version": 1}
 COMPONENT_PROP = {
-    "component1": {"__t": "c", "prop1": {"value": "value1"}},
+    "component1": {"__t": "c", "prop1": "value1"},
     "$version": 1,
 }
 COMPLEX_COMPONENT_PROP = {
-    "component1": {"__t": "c", "prop1": {"value": "value1"}},
+    "component1": {"__t": "c", "prop1": {"item1": "value1"}},
     "component2": {
         "__t": "c",
-        "prop1": {"value": "value1"},
-        "prop2": {"value": "value2"},
+        "prop1": "value1",
+        "prop2": 2,
     },
-    "prop2": {"value": "value2"},
+    "prop2": {"item2": "value2"},
     "$version": 1,
 }
 
@@ -113,9 +113,9 @@ async def test_on_properties_triggered_with_complex_component(mocker, iotc_clien
     await asyncio.sleep(0.1)
     prop_stub.assert_has_calls(
         [
-            mocker.call("prop1", "value1", "component1"),
+            mocker.call("prop1", {"item1":"value1"}, "component1"),
             mocker.call("prop1", "value1", "component2"),
-            mocker.call("prop2", "value2", "component2"),
+            mocker.call("prop2", 2, "component2"),
             mocker.call("prop2", "value2", None),
         ]
     )

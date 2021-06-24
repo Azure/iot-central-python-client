@@ -125,12 +125,12 @@ class IoTCClient(AbstractClient):
                 await self.send_property(
                     {
                         "{}".format(component_name): {
-                            "{}".format(property_name): {
-                                "ac": 200,
-                                "ad": "Property received",
-                                "av": property_version,
-                                "value": property_value,
-                            }
+                            "value": {
+                                "{}".format(property_name): property_value
+                            },
+                            "ac": 200,
+                            "ad": "Completed",
+                            "av": property_version,
                         }
                     }
                 )
@@ -140,7 +140,7 @@ class IoTCClient(AbstractClient):
                     {
                         "{}".format(property_name): {
                             "ac": 200,
-                            "ad": "Property received",
+                            "ad": "Completed",
                             "av": property_version,
                             "value": property_value,
                         }
@@ -156,10 +156,9 @@ class IoTCClient(AbstractClient):
             is_component = False
             if prop == "$version":
                 continue
-
             # check if component
             try:
-                is_component = patch[prop]["__t"]
+                is_component = str(type(patch[prop])) == "<class 'dict'>" and patch[prop]["__t"]
             except KeyError:
                 pass
             if is_component:
@@ -174,13 +173,13 @@ class IoTCClient(AbstractClient):
                     await self._handle_property_ack(
                         prop_cb,
                         component_prop,
-                        patch[prop][component_prop]["value"],
+                        patch[prop][component_prop],
                         patch["$version"],
                         prop,
                     )
             else:
                 await self._handle_property_ack(
-                    prop_cb, prop, patch[prop]["value"], patch["$version"]
+                    prop_cb, prop, patch[prop], patch["$version"]
                 )
 
     async def _on_properties(self):
@@ -204,20 +203,6 @@ class IoTCClient(AbstractClient):
             await asyncio.sleep(0.1)
 
         await self._logger.debug("Stopping properties listener...")
-
-    async def _cmd_ack(self, name, value, request_id, component_name):
-        if component_name is not None:
-            await self.send_property(
-                {
-                    "{}".format(component_name): {
-                        "{}".format(name): {"value": value, "requestId": request_id}
-                    }
-                }
-            )
-        else:
-            await self.send_property(
-                {"{}".format(name): {"value": value, "requestId": request_id}}
-            )
 
     async def _on_commands(self):
         await self._logger.debug("Setup commands listener")
@@ -255,12 +240,6 @@ class IoTCClient(AbstractClient):
                         200,
                         {"result": True, "data": "Command received"},
                     )
-                )
-                await self._cmd_ack(
-                    command.name,
-                    command.value,
-                    method_request.request_id,
-                    command.component_name,
                 )
 
             command.reply = reply_fn
@@ -364,7 +343,8 @@ class IoTCClient(AbstractClient):
                 self._cert_file = self._key_or_cert["cert_file"]
                 try:
                     self._cert_phrase = self._key_or_cert["cert_phrase"]
-                    x509 = X509(self._cert_file, self._key_file, self._cert_phrase)
+                    x509 = X509(self._cert_file, self._key_file,
+                                self._cert_phrase)
                 except:
                     await self._logger.debug(
                         "No passphrase available for certificate. Trying without it"
@@ -403,9 +383,10 @@ class IoTCClient(AbstractClient):
                     else None,
                 )
 
-            except:
+            except Exception as e:
                 await self._logger.info(
-                    "ERROR: Failed to get device provisioning information"
+                    "ERROR: Failed to get device provisioning information. {}".format(
+                        e)
                 )
                 sys.exit(1)
         # Connect to iothub
@@ -420,9 +401,11 @@ class IoTCClient(AbstractClient):
                 )
             else:
                 if 'cert_phrase' in _credentials.certificate:
-                    x509 = X509(_credentials.certificate['cert_file'], _credentials.certificate['key_file'], _credentials.certificate['cert_phrase'])
+                    x509 = X509(
+                        _credentials.certificate['cert_file'], _credentials.certificate['key_file'], _credentials.certificate['cert_phrase'])
                 else:
-                    x509 = X509(_credentials.certificate['cert_file'], _credentials.certificate['key_file'])
+                    x509 = X509(
+                        _credentials.certificate['cert_file'], _credentials.certificate['key_file'])
                 self._device_client = IoTHubDeviceClient.create_from_x509_certificate(
                     x509=x509,
                     hostname=_credentials.hub_name,
@@ -435,8 +418,8 @@ class IoTCClient(AbstractClient):
             twin_patch = self._sync_twin()
             if twin_patch is not None:
                 await self._update_properties(twin_patch, None)
-        except:
-            await self._logger.info("ERROR: Failed to connect to Hub")
+        except Exception as e:
+            await self._logger.info("ERROR: Failed to connect to Hub. {}".format(e))
             if force_dps is True:
                 sys.exit(1)
             await self.connect(True)
@@ -444,7 +427,8 @@ class IoTCClient(AbstractClient):
         # setup listeners
         self._prop_thread = asyncio.create_task(self._on_properties())
         self._cmd_thread = asyncio.create_task(self._on_commands())
-        self._enqueued_cmd_thread = asyncio.create_task(self._on_enqueued_commands())
+        self._enqueued_cmd_thread = asyncio.create_task(
+            self._on_enqueued_commands())
         signal.signal(signal.SIGINT, self.raise_graceful_exit)
         signal.signal(signal.SIGTERM, self.raise_graceful_exit)
 

@@ -180,7 +180,7 @@ class AbstractClient:
         """
         self._events[eventname] = callback
         return 0
-    
+
     def _sync_twin(self):
         try:
             desired = self._twin['desired']
@@ -193,12 +193,14 @@ class AbstractClient:
             return
         patch = {}
         for desired_prop in desired:
+            print("Syncing property '{}'".format(desired_prop))
             if desired_prop == '$version':
                 continue
-            if '__t' in desired[desired_prop]:  # is a component
+            # is a component
+            if str(type(desired[desired_prop])) == "<class 'dict'>" and '__t' in desired[desired_prop]:
                 desired_prop_component = desired_prop
                 for desired_prop_name in desired[desired_prop_component]:
-                    if desired_prop_name == '__t':
+                    if desired_prop_name == "__t":
                         continue
                     has_reported = False
                     try:
@@ -214,6 +216,8 @@ class AbstractClient:
                     has_reported = reported[desired_prop]
                 except KeyError:
                     pass
+                if not has_reported: # no reported yet. send desired
+                    patch[desired_prop] = desired[desired_prop]
                 # desired is more recent
                 if has_reported and 'av' in has_reported and has_reported['av'] < desired_version:
                     patch[desired_prop] = desired[desired_prop]
@@ -268,7 +272,7 @@ class IoTCClient(AbstractClient):
                         "{}".format(component_name): {
                             "{}".format(property_name): {
                                 "ac": 200,
-                                "ad": "Property received",
+                                "ad": "Completed",
                                 "av": property_version,
                                 "value": property_value,
                             }
@@ -281,7 +285,7 @@ class IoTCClient(AbstractClient):
                     {
                         "{}".format(property_name): {
                             "ac": 200,
-                            "ad": "Property received",
+                            "ad": "Completed",
                             "av": property_version,
                             "value": property_value,
                         }
@@ -300,7 +304,7 @@ class IoTCClient(AbstractClient):
 
             # check if component
             try:
-                is_component = patch[prop]["__t"]
+                is_component = str(type(patch[prop])) == "<class 'dict'>"
             except KeyError:
                 pass
             if is_component:
@@ -340,20 +344,6 @@ class IoTCClient(AbstractClient):
 
         self._logger.debug("Stopping properties listener...")
 
-    def _cmd_ack(self, name, value, request_id, component_name=None):
-        if component_name is not None:
-            self.send_property(
-                {
-                    "{}".format(component_name): {
-                        "{}".format(name): {"value": value, "requestId": request_id}
-                    }
-                }
-            )
-        else:
-            self.send_property(
-                {"{}".format(name): {"value": value, "requestId": request_id}}
-            )
-
     def _on_commands(self):
         self._logger.debug("Setup commands listener")
         while not self._terminate:
@@ -384,12 +374,6 @@ class IoTCClient(AbstractClient):
                         200,
                         {"result": True, "data": "Command received"},
                     )
-                )
-                self._cmd_ack(
-                    command.name,
-                    command.value,
-                    method_request.request_id,
-                    command.component_name,
                 )
 
             command.reply = reply_fn
@@ -555,9 +539,11 @@ class IoTCClient(AbstractClient):
                 )
             else:
                 if 'cert_phrase' in _credentials.certificate:
-                    x509 = X509(_credentials.certificate['cert_file'], _credentials.certificate['key_file'], _credentials.certificate['cert_phrase'])
+                    x509 = X509(
+                        _credentials.certificate['cert_file'], _credentials.certificate['key_file'], _credentials.certificate['cert_phrase'])
                 else:
-                    x509 = X509(_credentials.certificate['cert_file'], _credentials.certificate['key_file'])
+                    x509 = X509(
+                        _credentials.certificate['cert_file'], _credentials.certificate['key_file'])
                 self._device_client = IoTHubDeviceClient.create_from_x509_certificate(
                     x509=x509,
                     hostname=_credentials.hub_name,
@@ -568,6 +554,7 @@ class IoTCClient(AbstractClient):
             self._twin = self._device_client.get_twin()
             self._logger.debug("Current twin: {}".format(self._twin))
             prop_patch = self._sync_twin()
+            self._logger.debug("Properties to patch: {}".format(prop_patch))
             if prop_patch is not None:
                 self._update_properties(prop_patch, None)
         except:
@@ -603,7 +590,6 @@ class IoTCClient(AbstractClient):
         self._logger.info("Disconnecting client...")
         self._logger.info("Client disconnected.")
         self._logger.info("See you!")
-
 
     def _compute_derived_symmetric_key(self, secret, reg_id):
         # pylint: disable=no-member
