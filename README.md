@@ -11,8 +11,10 @@ It hides some of the complexities of the official Azure IoT SDK and uses IoT Cen
 
 ### Disclaimer
 
-> **This library is experimental and has the purpose of providing an easy to use solution for prototyping and small projects. Although stable and actively maintained, its use in production is discouraged.
-> Please refer to official [Azure IoT Python SDK](https://github.com/Azure/azure-iot-sdk-python) when building production products.**
+> **This library is experimental and has the purpose of providing an easy to use solution for prototyping and small projects. Its use in production is discouraged.
+The library is going to be archived soon so we suggest new developments to start using official Azure IoT SDK.**
+
+> Please refer to [Azure IoT Python SDK](https://github.com/Azure/azure-iot-sdk-python) when building production products.**
 
 _If you're looking for the v0.x.x client library, it is now preserved [here](https://github.com/obastemur/iot_client/tree/master/python).
 Latest version on pypi is 0.3.9_

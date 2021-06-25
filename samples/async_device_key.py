@@ -24,16 +24,17 @@ from iotc.aio import IoTCClient
 device_id = config["DEVICE_M3"]["DeviceId"]
 scope_id = config["DEVICE_M3"]["ScopeId"]
 key = config["DEVICE_M3"]["DeviceKey"]
-hub_name = config["DEVICE_M3"]["HubName"]
+# hub_name = config["SMARTPHONE"]["HubName"]
 
 
 class MemStorage(Storage):
     def retrieve(self):
-        return CredentialsCache(
-            hub_name,
-            device_id,
-            key,
-        )
+        # return CredentialsCache(
+        #     hub_name,
+        #     device_id,
+        #     key,
+        # )
+        return None
 
     def persist(self, credentials):
         # a further option would be updating config file with latest hub name
@@ -42,7 +43,7 @@ class MemStorage(Storage):
 
 # optional model Id for auto-provisioning
 try:
-    model_id = config["DEVICE_M3"]["ModelId"]
+    model_id = config["SMARTPHONE"]["ModelId"]
 except:
     model_id = None
 
@@ -89,17 +90,15 @@ async def main():
     await client.connect()
     await client.send_property({"writeableProp": 50})
     
-    while client.is_connected():
-        print("client connected {}".format(client._device_client.connected))
-        await client.send_telemetry(
-            {
-                "acceleration": {
-                    "x": str(randint(20, 45)),
-                    "y": str(randint(20, 45)),
-                    "z": str(randint(20, 45)),
+    while not client.terminated():
+        if client.is_connected():
+            await client.send_telemetry(
+                {
+                    "temperature": randint(20, 45)
+                },{
+                    "$.sub": "firstcomponent"
                 }
-            }
-        )
+            )
         await asyncio.sleep(3)
 
 asyncio.run(main())
