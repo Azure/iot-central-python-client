@@ -108,11 +108,8 @@ class ConsoleLogger:
         self._log_level = log_level
 
 
-terminate = False
-
-
 class AbstractClient:
-    def __init__(self, device_id, scope_id, cred_type, key_or_cert, storage=None):
+    def __init__(self, device_id, scope_id, cred_type, key_or_cert, storage=None, max_connection_attempts=5):
         self._device_id = device_id
         self._scope_id = scope_id
         self._cred_type = cred_type
@@ -127,6 +124,12 @@ class AbstractClient:
         self._global_endpoint = "global.azure-devices-provisioning.net"
         self._storage = storage
         self._terminate = False
+        self._connecting = False
+        self._max_connection_attempts = max_connection_attempts
+        self._connection_attempts_count = 0
+
+    def terminated(self):
+        return self._terminate
 
     def is_connected(self):
         """
@@ -207,6 +210,8 @@ class AbstractClient:
                         has_reported = reported[desired_prop_component][desired_prop_name]
                     except KeyError:
                         pass
+                    if not has_reported:  # no reported yet. send desired
+                        patch[desired_prop_component] = desired[desired_prop_component]
                     # desired is more recent
                     if has_reported and 'av' in has_reported and has_reported['av'] < desired_version:
                         patch[desired_prop_component] = desired[desired_prop_component]
@@ -216,7 +221,7 @@ class AbstractClient:
                     has_reported = reported[desired_prop]
                 except KeyError:
                     pass
-                if not has_reported: # no reported yet. send desired
+                if not has_reported:  # no reported yet. send desired
                     patch[desired_prop] = desired[desired_prop]
                 # desired is more recent
                 if has_reported and 'av' in has_reported and has_reported['av'] < desired_version:
@@ -231,10 +236,10 @@ class AbstractClient:
 
 class IoTCClient(AbstractClient):
     def __init__(
-        self, device_id, scope_id, cred_type, key_or_cert, logger=None, storage=None
+        self, device_id, scope_id, cred_type, key_or_cert, logger=None, storage=None, max_connection_attempts=5
     ):
         AbstractClient.__init__(
-            self, device_id, scope_id, cred_type, key_or_cert, storage
+            self, device_id, scope_id, cred_type, key_or_cert, storage, max_connection_attempts
         )
         if logger is None:
             self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
@@ -270,11 +275,12 @@ class IoTCClient(AbstractClient):
                 self.send_property(
                     {
                         "{}".format(component_name): {
+                            "__t": "c",
                             "{}".format(property_name): {
+                                "value": property_value,
                                 "ac": 200,
                                 "ad": "Completed",
-                                "av": property_version,
-                                "value": property_value,
+                                "av": property_version
                             }
                         }
                     }
@@ -304,7 +310,8 @@ class IoTCClient(AbstractClient):
 
             # check if component
             try:
-                is_component = str(type(patch[prop])) == "<class 'dict'>"
+                is_component = str(
+                    type(patch[prop])) == "<class 'dict'>" and patch[prop]["__t"]
             except KeyError:
                 pass
             if is_component:
@@ -319,43 +326,34 @@ class IoTCClient(AbstractClient):
                     self._handle_property_ack(
                         prop_cb,
                         component_prop,
-                        patch[prop][component_prop]["value"],
+                        patch[prop][component_prop],
                         patch["$version"],
                         prop,
                     )
             else:
                 self._handle_property_ack(
-                    prop_cb, prop, patch[prop]["value"], patch["$version"]
+                    prop_cb, prop, patch[prop], patch["$version"]
                 )
 
-    def _on_properties(self):
-        self._logger.debug("Setup properties listener.")
-        while not self._terminate:
-            try:
-                prop_cb = self._events[IOTCEvents.IOTC_PROPERTIES]
-            except KeyError:
-                time.sleep(0.1)
-                continue
-            patch = self._device_client.receive_twin_desired_properties_patch()
-            self._logger.debug("Received desired properties. {}".format(patch))
+    def _on_properties(self, patch):
+        self._logger.debug("Setup properties listener")
+        try:
+            prop_cb = self._events[IOTCEvents.IOTC_PROPERTIES]
+        except KeyError:
+            self._logger.debug("Properties callback not found")
+            return
 
-            self._update_properties(patch, prop_cb)
-            time.sleep(0.1)
+        self._update_properties(patch, prop_cb)
 
-        self._logger.debug("Stopping properties listener...")
-
-    def _on_commands(self):
+    def _on_commands(self, method_request):
         self._logger.debug("Setup commands listener")
-        while not self._terminate:
-            try:
-                cmd_cb = self._events[IOTCEvents.IOTC_COMMAND]
-            except KeyError:
-                time.sleep(0.1)
-                continue
-            # Wait for unknown method calls
-            method_request = self._device_client.receive_method_request()
-
-            command = Command(method_request.name, method_request.payload)
+        try:
+            cmd_cb = self._events[IOTCEvents.IOTC_COMMAND]
+        except KeyError:
+            self._logger.debug("Command callback not found")
+            return
+        command = Command(method_request.name, method_request.payload)
+        try:
             command_name_with_components = method_request.name.split("*")
 
             if len(command_name_with_components) > 1:
@@ -366,56 +364,49 @@ class IoTCClient(AbstractClient):
                     method_request.payload,
                     command_name_with_components[0],
                 )
+        except:
+            pass
 
-            def reply_fn():
-                self._device_client.send_method_response(
-                    MethodResponse.create_from_method_request(
-                        method_request,
-                        200,
-                        {"result": True, "data": "Command received"},
-                    )
+        def reply_fn():
+            self._device_client.send_method_response(
+                MethodResponse.create_from_method_request(
+                    method_request,
+                    200,
+                    {"result": True, "data": "Command received"},
                 )
+            )
 
-            command.reply = reply_fn
-            self._logger.debug(
-                "Received command {}".format(method_request.name))
+        command.reply = reply_fn
+        self._logger.debug("Received command {}".format(method_request.name))
+        cmd_cb(command)
 
-            cmd_cb(command)
-            time.sleep(0.1)
-        self._logger.debug("Stopping commands listener...")
+    def _on_enqueued_commands(self, c2d):
+        self._logger.debug("Setup offline commands listener")
+        try:
+            c2d_cb = self._events[IOTCEvents.IOTC_ENQUEUED_COMMAND]
+        except KeyError:
+            self._logger.debug("Command callback not found")
+            return
 
-    def _on_enqueued_commands(self):
-        self._logger.debug("Setup enqueued commands listener")
-        while not self._terminate:
-            try:
-                enqueued_cmd_cb = self._events[IOTCEvents.IOTC_ENQUEUED_COMMAND]
-            except KeyError:
-                time.sleep(0.1)
-                continue
-            # Wait for unknown method calls
-            c2d = self._device_client.receive_message()
-            c2d_name = c2d.custom_properties["method-name"]
-            command = Command(c2d_name, c2d.data)
-            try:
-                command_name_with_components = c2d_name.split("*")
+        # Wait for unknown method calls
+        c2d_name = c2d.custom_properties["method-name"]
+        command = Command(c2d_name, c2d.data)
+        try:
+            command_name_with_components = c2d_name.split("*")
 
-                if len(command_name_with_components) > 1:
-                    # In a component
-                    self._logger.debug("Command in a component")
-                    command = Command(
-                        command_name_with_components[1],
-                        c2d.data,
-                        command_name_with_components[0],
-                    )
-            except:
-                pass
+            if len(command_name_with_components) > 1:
+                # In a component
+                self._logger.debug("Command in a component")
+                command = Command(
+                    command_name_with_components[1],
+                    c2d.data,
+                    command_name_with_components[0],
+                )
+        except:
+            pass
 
-            self._logger.debug(
-                "Received offline command {}".format(command.name))
-
-            enqueued_cmd_cb(command)
-            time.sleep(0.1)
-        self._logger.debug("Stopping enqueued commands listener...")
+        self._logger.debug("Received offline command {}".format(command.name))
+        c2d_cb(command)
 
     def _send_message(self, payload, properties):
         msg = self._prepare_message(payload, properties)
@@ -443,13 +434,21 @@ class IoTCClient(AbstractClient):
         Connects the device.
         :raises exception: If connection fails
         """
+        if self._connection_attempts_count > self._max_connection_attempts:  # max number of retries. exit
+            self._terminate = True
+            self._connecting = False
+            return
         self._terminate = False
+        self._connecting = True
+
         _credentials = None
 
+        # search for existing credentials in store
         if self._storage is not None and force_dps is False:
             _credentials = self._storage.retrieve()
             self._logger.debug("Found cached credentials")
 
+        # no stored credentials. use dps
         if _credentials is None:
             if self._cred_type in (
                 IOTCConnectType.IOTC_CONNECT_DEVICE_KEY,
@@ -551,36 +550,42 @@ class IoTCClient(AbstractClient):
                 )
             self._device_client.connect()
             self._logger.debug("Device connected")
+            self._connecting = False
             self._twin = self._device_client.get_twin()
             self._logger.debug("Current twin: {}".format(self._twin))
             prop_patch = self._sync_twin()
             self._logger.debug("Properties to patch: {}".format(prop_patch))
             if prop_patch is not None:
                 self._update_properties(prop_patch, None)
-        except:
+        except:  # connection to hub failed. hub can be down or connection string expired. fallback to dps
             t, v, tb = sys.exc_info()
             self._logger.info("ERROR: Failed to connect to Hub")
-            if force_dps is True:
+            if force_dps is True:  # don't fallback to dps as we already using it for connecting
                 sys.exit(1)
+            self._connection_attempts_count += 1
             self.connect(True)
 
         # setup listeners
 
-        self._prop_thread = threading.Thread(target=self._on_properties)
-        self._prop_thread.daemon = True
-        self._prop_thread.start()
+        self._device_client.on_twin_desired_properties_patch_received = self._on_properties
+        self._device_client.on_method_request_received = self._on_commands
+        self._device_client.on_message_received = self._on_enqueued_commands
 
-        self._cmd_thread = threading.Thread(target=self._on_commands)
-        self._cmd_thread.daemon = True
-        self._cmd_thread.start()
-
-        self._enqueued_cmd_thread = threading.Thread(
-            target=self._on_enqueued_commands)
-        self._enqueued_cmd_thread.daemon = True
-        self._enqueued_cmd_thread.start()
+        self._conn_thread=threading.Thread(target=self._on_connection_state)
+        self._conn_thread.daemon=True
+        self._conn_thread.start()
 
         signal.signal(signal.SIGINT, self.disconnect)
         signal.signal(signal.SIGTERM, self.disconnect)
+
+    def _on_connection_state(self):
+        while not self._terminate:
+            if not self._connecting and not self.is_connected():
+                self._device_client.shutdown()
+                self._device_client = None
+                self._connection_attempts_count = 0
+                self.connect(True)
+            time.sleep(1.0)
 
     def disconnect(self, *args):
         self._logger.info("Received shutdown signal")

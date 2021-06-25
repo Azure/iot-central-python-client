@@ -2,6 +2,7 @@ import os
 import configparser
 import sys
 from random import randint
+import time
 
 config = configparser.ConfigParser()
 config.read(os.path.join(os.path.dirname(__file__),'samples.ini'))
@@ -73,17 +74,15 @@ def main():
     client.connect()
     client.send_property({"writeableProp": 50})
     
-    while client.is_connected():
-        print("client connected {}".format(client._device_client.connected))
-        client.send_telemetry(
-            {
-                "acceleration": {
-                    "x": str(randint(20, 45)),
-                    "y": str(randint(20, 45)),
-                    "z": str(randint(20, 45)),
+    while not client.terminated():
+        if client.is_connected():
+            client.send_telemetry(
+                {
+                    "temperature": randint(20, 45)
+                }, {
+                    "$.sub": "firstcomponent"
                 }
-            }
-        )
+            )
         time.sleep(3)
 
 main()

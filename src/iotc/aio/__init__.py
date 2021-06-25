@@ -75,10 +75,10 @@ class ConsoleLogger:
 
 class IoTCClient(AbstractClient):
     def __init__(
-        self, device_id, scope_id, cred_type, key_or_cert, logger=None, storage=None
+        self, device_id, scope_id, cred_type, key_or_cert, logger=None, storage=None, max_connection_attempts=5
     ):
         AbstractClient.__init__(
-            self, device_id, scope_id, cred_type, key_or_cert, storage
+            self, device_id, scope_id, cred_type, key_or_cert, storage, max_connection_attempts
         )
         if logger is None:
             self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
@@ -125,12 +125,13 @@ class IoTCClient(AbstractClient):
                 await self.send_property(
                     {
                         "{}".format(component_name): {
-                            "value": {
-                                "{}".format(property_name): property_value
-                            },
-                            "ac": 200,
-                            "ad": "Completed",
-                            "av": property_version,
+                            "__t": "c",
+                            "{}".format(property_name): {
+                                "value": property_value,
+                                "ac": 200,
+                                "ad": "Completed",
+                                "av": property_version
+                            }
                         }
                     }
                 )
@@ -158,7 +159,8 @@ class IoTCClient(AbstractClient):
                 continue
             # check if component
             try:
-                is_component = str(type(patch[prop])) == "<class 'dict'>" and patch[prop]["__t"]
+                is_component = str(
+                    type(patch[prop])) == "<class 'dict'>" and patch[prop]["__t"]
             except KeyError:
                 pass
             if is_component:
@@ -182,108 +184,78 @@ class IoTCClient(AbstractClient):
                     prop_cb, prop, patch[prop], patch["$version"]
                 )
 
-    async def _on_properties(self):
+    async def _on_properties(self, patch):
         await self._logger.debug("Setup properties listener")
-        while not self._terminate:
-            try:
-                prop_cb = self._events[IOTCEvents.IOTC_PROPERTIES]
-            except KeyError:
-                # await self._logger.debug("Properties callback not found")
-                await asyncio.sleep(0.1)
-                continue
-            try:
-                patch = (
-                    await self._device_client.receive_twin_desired_properties_patch()
-                )
-            except asyncio.CancelledError:
-                return
-            await self._logger.debug("Received desired properties. {}".format(patch))
+        try:
+            prop_cb = self._events[IOTCEvents.IOTC_PROPERTIES]
+        except KeyError:
+            await self._logger.debug("Properties callback not found")
+            return
 
-            await self._update_properties(patch, prop_cb)
-            await asyncio.sleep(0.1)
+        await self._update_properties(patch, prop_cb)
 
-        await self._logger.debug("Stopping properties listener...")
-
-    async def _on_commands(self):
+    async def _on_commands(self, method_request):
         await self._logger.debug("Setup commands listener")
-        while not self._terminate:
-            try:
-                cmd_cb = self._events[IOTCEvents.IOTC_COMMAND]
-            except KeyError:
-                # await self._logger.debug("Commands callback not found")
-                await asyncio.sleep(0.1)
-                continue
-            # Wait for unknown method calls
-            try:
-                method_request = await self._device_client.receive_method_request()
-            except asyncio.CancelledError:
-                return
-            command = Command(method_request.name, method_request.payload)
-            try:
-                command_name_with_components = method_request.name.split("*")
+        try:
+            cmd_cb = self._events[IOTCEvents.IOTC_COMMAND]
+        except KeyError:
+            await self._logger.debug("Command callback not found")
+            return
+        command = Command(method_request.name, method_request.payload)
+        try:
+            command_name_with_components = method_request.name.split("*")
 
-                if len(command_name_with_components) > 1:
-                    # In a component
-                    await self._logger.debug("Command in a component")
-                    command = Command(
-                        command_name_with_components[1],
-                        method_request.payload,
-                        command_name_with_components[0],
-                    )
-            except:
-                pass
-
-            async def reply_fn():
-                await self._device_client.send_method_response(
-                    MethodResponse.create_from_method_request(
-                        method_request,
-                        200,
-                        {"result": True, "data": "Command received"},
-                    )
+            if len(command_name_with_components) > 1:
+                # In a component
+                await self._logger.debug("Command in a component")
+                command = Command(
+                    command_name_with_components[1],
+                    method_request.payload,
+                    command_name_with_components[0],
                 )
+        except:
+            pass
 
-            command.reply = reply_fn
-            await self._logger.debug("Received command {}".format(method_request.name))
+        async def reply_fn():
+            await self._device_client.send_method_response(
+                MethodResponse.create_from_method_request(
+                    method_request,
+                    200,
+                    {"result": True, "data": "Command received"},
+                )
+            )
 
-            await cmd_cb(command)
-            await asyncio.sleep(0.1)
-        await self._logger.debug("Stopping commands listener...")
+        command.reply = reply_fn
+        await self._logger.debug("Received command {}".format(method_request.name))
+        await cmd_cb(command)
 
-    async def _on_enqueued_commands(self):
-        await self._logger.debug("Setup enqueued commands listener")
-        while not self._terminate:
-            try:
-                enqueued_cmd_cb = self._events[IOTCEvents.IOTC_ENQUEUED_COMMAND]
-            except KeyError:
-                await self._logger.debug("Enqueued commands callback not found")
-                await asyncio.sleep(0.1)
-                continue
-            # Wait for unknown method calls
-            try:
-                c2d = await self._device_client.receive_message()
-            except asyncio.CancelledError:
-                return
-            c2d_name = c2d.custom_properties["method-name"]
-            command = Command(c2d_name, c2d.data)
-            try:
-                command_name_with_components = c2d_name.split("*")
+    async def _on_enqueued_commands(self, c2d):
+        await self._logger.debug("Setup offline commands listener")
+        try:
+            c2d_cb = self._events[IOTCEvents.IOTC_ENQUEUED_COMMAND]
+        except KeyError:
+            await self._logger.debug("Command callback not found")
+            return
 
-                if len(command_name_with_components) > 1:
-                    # In a component
-                    await self._logger.debug("Command in a component")
-                    command = Command(
-                        command_name_with_components[1],
-                        c2d.data,
-                        command_name_with_components[0],
-                    )
-            except:
-                pass
+        # Wait for unknown method calls
+        c2d_name = c2d.custom_properties["method-name"]
+        command = Command(c2d_name, c2d.data)
+        try:
+            command_name_with_components = c2d_name.split("*")
 
-            await self._logger.debug("Received offline command {}".format(command.name))
+            if len(command_name_with_components) > 1:
+                # In a component
+                await self._logger.debug("Command in a component")
+                command = Command(
+                    command_name_with_components[1],
+                    c2d.data,
+                    command_name_with_components[0],
+                )
+        except:
+            pass
 
-            await enqueued_cmd_cb(command)
-            await asyncio.sleep(0.1)
-        await self._logger.debug("Stopping enqueued commands listener...")
+        await self._logger.debug("Received offline command {}".format(command.name))
+        await c2d_cb(command)
 
     async def _send_message(self, payload, properties):
         msg = self._prepare_message(payload, properties)
@@ -311,7 +283,14 @@ class IoTCClient(AbstractClient):
         Connects the device.
         :raises exception: If connection fails
         """
+
+        if self._connection_attempts_count > self._max_connection_attempts:  # max number of retries. exit
+            self._terminate = True
+            self._connecting = False
+            return
+
         self._terminate = False
+        self._connecting = True
         _credentials = None
 
         if self._storage is not None and force_dps is False:
@@ -391,7 +370,6 @@ class IoTCClient(AbstractClient):
                 sys.exit(1)
         # Connect to iothub
         try:
-            print(_credentials.connection_string)
             if self._cred_type in (
                 IOTCConnectType.IOTC_CONNECT_DEVICE_KEY,
                 IOTCConnectType.IOTC_CONNECT_SYMM_KEY,
@@ -412,39 +390,53 @@ class IoTCClient(AbstractClient):
                     device_id=_credentials.device_id,
                 )
             await self._device_client.connect()
-            await self._logger.debug("Device connected")
+            await self._logger.debug("Device connected to '{}'".format(_credentials.hub_name))
+            self._connecting = False
             self._twin = await self._device_client.get_twin()
             await self._logger.debug("Current twin: {}".format(self._twin))
             twin_patch = self._sync_twin()
             if twin_patch is not None:
                 await self._update_properties(twin_patch, None)
-        except Exception as e:
+        except Exception as e:  # connection to hub failed. hub can be down or connection string expired. fallback to dps
             await self._logger.info("ERROR: Failed to connect to Hub. {}".format(e))
             if force_dps is True:
                 sys.exit(1)
+            self._connection_attempts_count += 1
             await self.connect(True)
 
         # setup listeners
-        self._prop_thread = asyncio.create_task(self._on_properties())
-        self._cmd_thread = asyncio.create_task(self._on_commands())
-        self._enqueued_cmd_thread = asyncio.create_task(
-            self._on_enqueued_commands())
+        self._device_client.on_twin_desired_properties_patch_received = self._on_properties
+        self._device_client.on_method_request_received = self._on_commands
+        self._device_client.on_message_received = self._on_enqueued_commands
+
+        if hasattr(self,'_conn_thread') and self._conn_thread is not None:
+            try:
+                self._conn_thread.cancel()
+                await self._conn_thread
+            except asyncio.CancelledError:
+                print("Resetting conn_status thread")
+        self._conn_thread = asyncio.create_task(self._on_connection_state())
+
         signal.signal(signal.SIGINT, self.raise_graceful_exit)
         signal.signal(signal.SIGTERM, self.raise_graceful_exit)
 
+    async def _on_connection_state(self):
+        while not self._terminate:
+            if not self._connecting and not self.is_connected():
+                await self._device_client.shutdown()
+                self._device_client = None
+                self._connection_attempts_count = 0
+                await self.connect(True)
+            await asyncio.sleep(1.0)
+
     async def disconnect(self):
         await self._logger.info("Received shutdown signal")
-        if (
-            self._prop_thread is not None
-            and self._cmd_thread is not None
-            and self._enqueued_cmd_thread is not None
-        ):
-            tasks = asyncio.gather(
-                self._prop_thread, self._cmd_thread, self._enqueued_cmd_thread
-            )
         self._terminate = True
+        if hasattr(self,'_conn_thread') and self._conn_thread is not None:
+            tasks = asyncio.gather(
+                self._conn_thread
+            )
         try:
-            tasks.cancel()
             await tasks
         except:
             pass
