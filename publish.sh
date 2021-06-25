@@ -14,12 +14,12 @@ fi
 
 echo "Run tests..."
 
-python3 -m pytest src/iotc/test
+python -m pytest src/iotc/test
 RESULT=$?
 if [[ $RESULT -eq 1 ]]; then
   echo "Python3 tests failed. Exiting ..."
   exit -1
 fi
 
-python3 setup.py sdist bdist_wheel
-python3 -m twine upload $TEST dist/*
+python setup.py sdist bdist_wheel
+python -m twine upload $TEST dist/*
