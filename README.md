@@ -40,7 +40,7 @@ These clients are available with an asynchronous API, as well as a blocking sync
 
 Check out the [sample repository](samples) for example code showing how the SDK can be used in the various scenarios:
 
-- [async_device_key](samples/async_device_key) - Sending telemetry and receiving properties and commands with device connected through **symmetric key** (Python 3.7+)
+- [async_device_key](samples/async_device_key.py) - Sending telemetry and receiving properties and commands with device connected through **symmetric key** (Python 3.7+)
 - [async_x509](samples/async_x509.py) - Sending telemetry and receiving properties and commands with device connected through **x509 certificates** (Python 3.7+)
 - [async_file_logger](samples/async_file_logger.py) - Print logs on file with rotation (Python 3.7+)
 - [async_eventhub_logger](samples/async_eventhub_logger.py) - Redirect logs to Azure Event Hub (Python 3.7+)
