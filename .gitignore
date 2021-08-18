@@ -23,3 +23,5 @@ Lib/
 Scripts/
 bin/
 pyvenv.cfg
+
+.DS_Store
