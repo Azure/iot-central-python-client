@@ -41,6 +41,18 @@ class CredentialsCache(object):
                 self._hub_name, self._device_id
             )
 
+    def todict(self):
+        return {
+            "device_id": self.device_id,
+            "hub_name": self.hub_name,
+            "connection_string": self.connection_string,
+            "device_key": self.device_key,
+        }
+
+    @classmethod
+    def from_dict(classref, data: dict):
+        return CredentialsCache(data["hub_name"], data["device_id"], data["device_key"])
+
 
 class Storage(object):
     __metaclass__ = abc.ABCMeta
@@ -75,3 +87,31 @@ class Command(object):
     @property
     def component_name(self):
         return self._component_name
+
+    def __eq__(self, o: object) -> bool:
+        return self.name == o.name and self.value == o.value and self.component_name == o.component_name
+
+
+class Property(object):
+    def __init__(self, property_name, property_value, component_name=None):
+        self._property_name = property_name
+        self._property_value = property_value
+        if component_name is not None:
+            self._component_name = component_name
+        else:
+            self._component_name = None
+
+    @property
+    def name(self):
+        return self._property_name
+
+    @property
+    def value(self):
+        return self._property_value
+
+    @property
+    def component_name(self):
+        return self._component_name
+
+    def __eq__(self, o: object) -> bool:
+        return self.name == o.name and self.value == o.value and self.component_name == o.component_name

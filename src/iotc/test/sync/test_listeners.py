@@ -1,5 +1,6 @@
-from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents, IoTCClient, Command
+from iotc import IOTCConnectType, IOTCLogLevel, IOTCEvents, IoTCClient
 from iotc.test import dummy_storage
+from iotc.models import Command, Property
 from azure.iot.device import MethodRequest, Message
 import pytest
 import configparser
@@ -76,8 +77,9 @@ def test_on_properties_triggered(mocker, iotc_client):
     prop_stub = mocker.MagicMock()
     iotc_client.on(IOTCEvents.IOTC_PROPERTIES, prop_stub)
     iotc_client.connect()
-    iotc_client._device_client.on_twin_desired_properties_patch_received(DEFAULT_COMPONENT_PROP)
-    prop_stub.assert_called_with("prop1", {"value":"value1"}, None)
+    iotc_client._device_client.on_twin_desired_properties_patch_received(
+        DEFAULT_COMPONENT_PROP)
+    prop_stub.assert_called_with(Property("prop1", {"value": "value1"}))
 
 
 def test_on_properties_triggered_with_component(mocker, iotc_client):
@@ -86,8 +88,10 @@ def test_on_properties_triggered_with_component(mocker, iotc_client):
     prop_stub.return_value = True
     iotc_client.on(IOTCEvents.IOTC_PROPERTIES, prop_stub)
     iotc_client.connect()
-    iotc_client._device_client.on_twin_desired_properties_patch_received(COMPONENT_PROP)
-    prop_stub.assert_called_with("prop1", {"value": "value1"}, "component1")
+    iotc_client._device_client.on_twin_desired_properties_patch_received(
+        COMPONENT_PROP)
+    prop_stub.assert_called_with(
+        Property("prop1", {"value": "value1"}, "component1"))
 
 
 def test_on_properties_triggered_with_complex_component(mocker, iotc_client):
@@ -96,13 +100,14 @@ def test_on_properties_triggered_with_complex_component(mocker, iotc_client):
     prop_stub.return_value = True
     iotc_client.on(IOTCEvents.IOTC_PROPERTIES, prop_stub)
     iotc_client.connect()
-    iotc_client._device_client.on_twin_desired_properties_patch_received(COMPLEX_COMPONENT_PROP)
+    iotc_client._device_client.on_twin_desired_properties_patch_received(
+        COMPLEX_COMPONENT_PROP)
     prop_stub.assert_has_calls(
         [
-            mocker.call("prop1", {"item1": "value1"}, "component1"),
-            mocker.call("prop1", "value1", "component2"),
-            mocker.call("prop2", 2, "component2"),
-            mocker.call("prop2", {"item2": "value2"}, None),
+            mocker.call(Property("prop1", {"item1": "value1"}, "component1")),
+            mocker.call(Property("prop1", "value1", "component2")),
+            mocker.call(Property("prop2", 2, "component2")),
+            mocker.call(Property("prop2", {"item2": "value2"})),
         ], any_order=True
     )
 

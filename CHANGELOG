@@ -1,3 +1,14 @@
+1.1.2 (2021-11-8)
+-----------------
+- added credentials cache serialize/deserialize methods
+- added "Property" model
+- added storage tests
+
+1.1.1 (2021-06-25)
+-----------------
+- minor fixes for value wrapping
+
+
 1.1.0 (2021-02-05)
 -----------------
 - dropped Python 2.7 support (client should continue to work without tests)
