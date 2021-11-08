@@ -1,3 +1,10 @@
+from iotc.models import Command, Property, CredentialsCache, Storage
+from iotc.aio import IoTCClient
+from iotc import (
+    IOTCConnectType,
+    IOTCLogLevel,
+    IOTCEvents,
+)
 import os
 import asyncio
 import configparser
@@ -12,22 +19,13 @@ config.read(os.path.join(os.path.dirname(__file__), "samples.ini"))
 if config["DEFAULT"].getboolean("Local"):
     sys.path.insert(0, "src")
 
-from iotc import (
-    IOTCConnectType,
-    IOTCLogLevel,
-    IOTCEvents,
-    Command,
-    CredentialsCache,
-    Storage,
-)
-from iotc.aio import IoTCClient
 
 class FileLogger:
-    def __init__(self,logpath,logname="iotc_py_log"):
-        self._logger=logging.getLogger(logname)
+    def __init__(self, logpath, logname="iotc_py_log"):
+        self._logger = logging.getLogger(logname)
         self._logger.setLevel(logging.DEBUG)
-        handler= logging.handlers.RotatingFileHandler(
-              os.path.join(logpath,logname), maxBytes=20, backupCount=5)
+        handler = logging.handlers.RotatingFileHandler(
+            os.path.join(logpath, logname), maxBytes=20, backupCount=5)
         self._logger.addHandler(handler)
 
     async def _log(self, message):
@@ -46,13 +44,11 @@ class FileLogger:
         self._log_level = log_level
 
 
-
 device_id = config["DEVICE_M3"]["DeviceId"]
 scope_id = config["DEVICE_M3"]["ScopeId"]
 key = config["DEVICE_M3"]["DeviceKey"]
 hub_name = config["DEVICE_M3"]["HubName"]
 log_path = config['FileLog']['LogsPath']
-
 
 
 class MemStorage(Storage):
@@ -75,8 +71,8 @@ except:
     model_id = None
 
 
-async def on_props(property_name, property_value, component_name):
-    print("Received {}:{}".format(property_name, property_value))
+async def on_props(prop: Property):
+    print(f"Received {prop.name}:{prop.value}")
     return True
 
 
@@ -85,8 +81,9 @@ async def on_commands(command: Command):
     await command.reply()
 
 
-async def on_enqueued_commands(command:Command):
-    print("Received offline command {} with value {}".format(command.name, command.value))
+async def on_enqueued_commands(command: Command):
+    print("Received offline command {} with value {}".format(
+        command.name, command.value))
 
 
 # change connect type to reflect the used key (device or group)
@@ -106,16 +103,17 @@ client.on(IOTCEvents.IOTC_PROPERTIES, on_props)
 client.on(IOTCEvents.IOTC_COMMAND, on_commands)
 client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, on_enqueued_commands)
 
+
 async def main():
     await client.connect()
     await client.send_property({"writeableProp": 50})
-    
+
     while not client.terminated():
         if client.is_connected():
             await client.send_telemetry(
                 {
                     "temperature": randint(20, 45)
-                },{
+                }, {
                     "$.sub": "firstcomponent"
                 }
             )

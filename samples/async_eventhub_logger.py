@@ -4,10 +4,10 @@ from iotc import (
     IOTCConnectType,
     IOTCLogLevel,
     IOTCEvents,
-    Command,
     CredentialsCache,
     Storage,
 )
+from iotc.models import Command, Property
 import os
 import asyncio
 import configparser
@@ -76,8 +76,8 @@ except:
     model_id = None
 
 
-async def on_props(property_name, property_value, component_name):
-    print("Received {}:{}".format(property_name, property_value))
+async def on_props(prop: Property):
+    print(f"Received {prop.name}:{prop.value}")
     return True
 
 

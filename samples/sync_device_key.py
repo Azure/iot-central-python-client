@@ -1,5 +1,13 @@
+from iotc.models import Command, Storage, CredentialsCache, Property
+from iotc import IoTCClient
+from iotc import (
+    IOTCConnectType,
+    IOTCLogLevel,
+    IOTCEvents,
+)
 import os
 import configparser
+from re import M
 import sys
 import time
 
@@ -11,15 +19,6 @@ config.read(os.path.join(os.path.dirname(__file__), "samples.ini"))
 if config["DEFAULT"].getboolean("Local"):
     sys.path.insert(0, "src")
 
-from iotc import (
-    IOTCConnectType,
-    IOTCLogLevel,
-    IOTCEvents,
-    Command,
-    CredentialsCache,
-    Storage,
-)
-from iotc import IoTCClient
 
 device_id = config["DEVICE_M3"]["DeviceId"]
 scope_id = config["DEVICE_M3"]["ScopeId"]
@@ -47,8 +46,8 @@ except:
     model_id = None
 
 
-def on_props(property_name, property_value, component_name):
-    print("Received {}:{}".format(property_name, property_value))
+def on_props(prop: Property):
+    print(f"Received {prop.name}:{prop.value}")
     return True
 
 
@@ -58,7 +57,8 @@ def on_commands(command):
 
 
 def on_enqueued_commands(command):
-    print("Received offline command {} with value {}".format(command.name, command.value))
+    print("Received offline command {} with value {}".format(
+        command.name, command.value))
 
 
 # change connect type to reflect the used key (device or group)
@@ -81,7 +81,7 @@ client.on(IOTCEvents.IOTC_ENQUEUED_COMMAND, on_enqueued_commands)
 def main():
     client.connect()
     client.send_property({"writeableProp": 50})
-    
+
     while not client.terminated():
         if client.is_connected():
             client.send_telemetry(
@@ -92,5 +92,6 @@ def main():
                 }
             )
         time.sleep(3)
+
 
 main()

@@ -8,7 +8,7 @@ from azure.iot.device import IoTHubDeviceClient
 from azure.iot.device import ProvisioningDeviceClient
 from azure.iot.device import Message, MethodResponse
 from datetime import datetime
-from .models import Command, CredentialsCache, Storage, GracefulExit
+from .models import Command, CredentialsCache, Property, Storage, GracefulExit
 
 try:
     __version__ = pkg_resources.get_distribution("iotc").version
@@ -266,7 +266,8 @@ class IoTCClient(AbstractClient):
         component_name=None,
     ):
         if callback is not None:
-            ret = callback(property_name, property_value, component_name)
+            prop = Property(property_name, property_value, component_name)
+            ret = callback(prop)
         else:
             ret = True
         if ret:
@@ -571,8 +572,8 @@ class IoTCClient(AbstractClient):
         self._device_client.on_method_request_received = self._on_commands
         self._device_client.on_message_received = self._on_enqueued_commands
 
-        self._conn_thread=threading.Thread(target=self._on_connection_state)
-        self._conn_thread.daemon=True
+        self._conn_thread = threading.Thread(target=self._on_connection_state)
+        self._conn_thread.daemon = True
         self._conn_thread.start()
 
         signal.signal(signal.SIGINT, self.disconnect)

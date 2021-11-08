@@ -2,6 +2,8 @@ import sys
 import signal
 import asyncio
 import pkg_resources
+
+from iotc.models import Property
 from .. import (
     AbstractClient,
     IOTCLogLevel,
@@ -116,7 +118,8 @@ class IoTCClient(AbstractClient):
         component_name=None,
     ):
         if callback is not None:
-            ret = await callback(property_name, property_value, component_name)
+            prop = Property(property_name, property_value, component_name)
+            ret = await callback(prop)
         else:
             ret = True
         if ret:
@@ -362,6 +365,9 @@ class IoTCClient(AbstractClient):
                     else None,
                 )
 
+                if self._storage is not None:
+                    self._storage.persist(_credentials)
+
             except Exception as e:
                 await self._logger.info(
                     "ERROR: Failed to get device provisioning information. {}".format(
@@ -409,7 +415,7 @@ class IoTCClient(AbstractClient):
         self._device_client.on_method_request_received = self._on_commands
         self._device_client.on_message_received = self._on_enqueued_commands
 
-        if hasattr(self,'_conn_thread') and self._conn_thread is not None:
+        if hasattr(self, '_conn_thread') and self._conn_thread is not None:
             try:
                 self._conn_thread.cancel()
                 await self._conn_thread
@@ -432,7 +438,7 @@ class IoTCClient(AbstractClient):
     async def disconnect(self):
         await self._logger.info("Received shutdown signal")
         self._terminate = True
-        if hasattr(self,'_conn_thread') and self._conn_thread is not None:
+        if hasattr(self, '_conn_thread') and self._conn_thread is not None:
             tasks = asyncio.gather(
                 self._conn_thread
             )

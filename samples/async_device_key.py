@@ -5,6 +5,8 @@ import sys
 
 from random import randint
 
+from iotc.models import Property,Command
+
 config = configparser.ConfigParser()
 config.read(os.path.join(os.path.dirname(__file__), "samples.ini"))
 
@@ -29,11 +31,6 @@ key = config["DEVICE_M3"]["DeviceKey"]
 
 class MemStorage(Storage):
     def retrieve(self):
-        # return CredentialsCache(
-        #     hub_name,
-        #     device_id,
-        #     key,
-        # )
         return None
 
     def persist(self, credentials):
@@ -48,8 +45,8 @@ except:
     model_id = None
 
 
-async def on_props(property_name, property_value, component_name):
-    print("Received {}:{}".format(property_name, property_value))
+async def on_props(prop:Property):
+    print(f"Received {prop.name}:{prop.value}")
     return True
 
 
