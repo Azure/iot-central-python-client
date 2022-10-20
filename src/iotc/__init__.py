@@ -109,7 +109,15 @@ class ConsoleLogger:
 
 
 class AbstractClient:
-    def __init__(self, device_id, scope_id, cred_type, key_or_cert, storage=None, max_connection_attempts=5):
+    def __init__(
+        self,
+        device_id,
+        scope_id,
+        cred_type,
+        key_or_cert,
+        storage=None,
+        max_connection_attempts=5,
+    ):
         self._device_id = device_id
         self._scope_id = scope_id
         self._cred_type = cred_type
@@ -168,8 +176,7 @@ class AbstractClient:
         self._content_encoding = content_encoding
 
     def _prepare_message(self, payload, properties):
-        msg = Message(payload, uuid.uuid4(),
-                      self._content_encoding, self._content_type)
+        msg = Message(payload, uuid.uuid4(), self._content_encoding, self._content_type)
         if bool(properties):
             for prop in properties:
                 msg.custom_properties[prop] = properties[prop]
@@ -186,34 +193,43 @@ class AbstractClient:
 
     def _sync_twin(self):
         try:
-            desired = self._twin['desired']
-            desired_version = self._twin['desired']['$version']
+            desired = self._twin["desired"]
+            desired_version = self._twin["desired"]["$version"]
         except KeyError:
             return
         try:
-            reported = self._twin['reported']
+            reported = self._twin["reported"]
         except KeyError:
             return
         patch = {}
         for desired_prop in desired:
             print("Syncing property '{}'".format(desired_prop))
-            if desired_prop == '$version':
+            if desired_prop == "$version":
                 continue
             # is a component
-            if str(type(desired[desired_prop])) == "<class 'dict'>" and '__t' in desired[desired_prop]:
+            if (
+                str(type(desired[desired_prop])) == "<class 'dict'>"
+                and "__t" in desired[desired_prop]
+            ):
                 desired_prop_component = desired_prop
                 for desired_prop_name in desired[desired_prop_component]:
                     if desired_prop_name == "__t":
                         continue
                     has_reported = False
                     try:
-                        has_reported = reported[desired_prop_component][desired_prop_name]
+                        has_reported = reported[desired_prop_component][
+                            desired_prop_name
+                        ]
                     except KeyError:
                         pass
                     if not has_reported:  # no reported yet. send desired
                         patch[desired_prop_component] = desired[desired_prop_component]
                     # desired is more recent
-                    if has_reported and 'av' in has_reported and has_reported['av'] < desired_version:
+                    if (
+                        has_reported
+                        and "av" in has_reported
+                        and has_reported["av"] < desired_version
+                    ):
                         patch[desired_prop_component] = desired[desired_prop_component]
             else:  # default component
                 has_reported = False
@@ -224,11 +240,15 @@ class AbstractClient:
                 if not has_reported:  # no reported yet. send desired
                     patch[desired_prop] = desired[desired_prop]
                 # desired is more recent
-                if has_reported and 'av' in has_reported and has_reported['av'] < desired_version:
+                if (
+                    has_reported
+                    and "av" in has_reported
+                    and has_reported["av"] < desired_version
+                ):
                     patch[desired_prop] = desired[desired_prop]
 
         if patch:  # there are desired to ack
-            patch['$version'] = desired_version
+            patch["$version"] = desired_version
             return patch
         else:
             return None
@@ -236,10 +256,23 @@ class AbstractClient:
 
 class IoTCClient(AbstractClient):
     def __init__(
-        self, device_id, scope_id, cred_type, key_or_cert, logger=None, storage=None, max_connection_attempts=5
+        self,
+        device_id,
+        scope_id,
+        cred_type,
+        key_or_cert,
+        logger=None,
+        storage=None,
+        max_connection_attempts=5,
     ):
         AbstractClient.__init__(
-            self, device_id, scope_id, cred_type, key_or_cert, storage, max_connection_attempts
+            self,
+            device_id,
+            scope_id,
+            cred_type,
+            key_or_cert,
+            storage,
+            max_connection_attempts,
         )
         if logger is None:
             self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
@@ -281,8 +314,8 @@ class IoTCClient(AbstractClient):
                                 "value": property_value,
                                 "ac": 200,
                                 "ad": "Completed",
-                                "av": property_version
-                            }
+                                "av": property_version,
+                            },
                         }
                     }
                 )
@@ -311,8 +344,9 @@ class IoTCClient(AbstractClient):
 
             # check if component
             try:
-                is_component = str(
-                    type(patch[prop])) == "<class 'dict'>" and patch[prop]["__t"]
+                is_component = (
+                    str(type(patch[prop])) == "<class 'dict'>" and patch[prop]["__t"]
+                )
             except KeyError:
                 pass
             if is_component:
@@ -332,9 +366,7 @@ class IoTCClient(AbstractClient):
                         prop,
                     )
             else:
-                self._handle_property_ack(
-                    prop_cb, prop, patch[prop], patch["$version"]
-                )
+                self._handle_property_ack(prop_cb, prop, patch[prop], patch["$version"])
 
     def _on_properties(self, patch):
         self._logger.debug("Setup properties listener")
@@ -435,7 +467,9 @@ class IoTCClient(AbstractClient):
         Connects the device.
         :raises exception: If connection fails
         """
-        if self._connection_attempts_count > self._max_connection_attempts:  # max number of retries. exit
+        if (
+            self._connection_attempts_count > self._max_connection_attempts
+        ):  # max number of retries. exit
             self._terminate = True
             self._connecting = False
             return
@@ -459,8 +493,7 @@ class IoTCClient(AbstractClient):
                     self._key_or_cert = self._compute_derived_symmetric_key(
                         self._key_or_cert, self._device_id
                     )
-                    self._logger.debug(
-                        "Device key: {}".format(self._key_or_cert))
+                    self._logger.debug("Device key: {}".format(self._key_or_cert))
 
                 self._provisioning_client = (
                     ProvisioningDeviceClient.create_from_symmetric_key(
@@ -475,8 +508,7 @@ class IoTCClient(AbstractClient):
                 self._cert_file = self._key_or_cert["cert_file"]
                 try:
                     self._cert_phrase = self._key_or_cert["cert_phrase"]
-                    x509 = X509(self._cert_file, self._key_file,
-                                self._cert_phrase)
+                    x509 = X509(self._cert_file, self._key_file, self._cert_phrase)
                 except:
                     self._logger.debug(
                         "No passphrase available for certificate. Trying without it"
@@ -494,7 +526,8 @@ class IoTCClient(AbstractClient):
 
             if self._model_id:
                 self._provisioning_client.provisioning_payload = {
-                    "iotcModelId": self._model_id
+                    "iotcModelId": self._model_id,
+                    "modelId": self._model_id,
                 }
             try:
                 registration_result = self._provisioning_client.register()
@@ -535,19 +568,25 @@ class IoTCClient(AbstractClient):
                 IOTCConnectType.IOTC_CONNECT_SYMM_KEY,
             ):
                 self._device_client = IoTHubDeviceClient.create_from_connection_string(
-                    _credentials.connection_string
+                    _credentials.connection_string, product_info=self._model_id
                 )
             else:
-                if 'cert_phrase' in _credentials.certificate:
+                if "cert_phrase" in _credentials.certificate:
                     x509 = X509(
-                        _credentials.certificate['cert_file'], _credentials.certificate['key_file'], _credentials.certificate['cert_phrase'])
+                        _credentials.certificate["cert_file"],
+                        _credentials.certificate["key_file"],
+                        _credentials.certificate["cert_phrase"],
+                    )
                 else:
                     x509 = X509(
-                        _credentials.certificate['cert_file'], _credentials.certificate['key_file'])
+                        _credentials.certificate["cert_file"],
+                        _credentials.certificate["key_file"],
+                    )
                 self._device_client = IoTHubDeviceClient.create_from_x509_certificate(
                     x509=x509,
                     hostname=_credentials.hub_name,
                     device_id=_credentials.device_id,
+                    product_info=self._model_id,
                 )
             self._device_client.connect()
             self._logger.debug("Device connected")
@@ -561,14 +600,18 @@ class IoTCClient(AbstractClient):
         except:  # connection to hub failed. hub can be down or connection string expired. fallback to dps
             t, v, tb = sys.exc_info()
             self._logger.info("ERROR: Failed to connect to Hub")
-            if force_dps is True:  # don't fallback to dps as we already using it for connecting
+            if (
+                force_dps is True
+            ):  # don't fallback to dps as we already using it for connecting
                 sys.exit(1)
             self._connection_attempts_count += 1
             self.connect(True)
 
         # setup listeners
 
-        self._device_client.on_twin_desired_properties_patch_received = self._on_properties
+        self._device_client.on_twin_desired_properties_patch_received = (
+            self._on_properties
+        )
         self._device_client.on_method_request_received = self._on_commands
         self._device_client.on_message_received = self._on_enqueued_commands
 
@@ -602,8 +645,7 @@ class IoTCClient(AbstractClient):
         try:
             secret = base64.b64decode(secret)
         except:
-            self._logger.debug(
-                "ERROR: broken base64 secret => `" + secret + "`")
+            self._logger.debug("ERROR: broken base64 secret => `" + secret + "`")
             sys.exit()
 
         return base64.b64encode(

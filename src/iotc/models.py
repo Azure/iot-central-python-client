@@ -89,7 +89,11 @@ class Command(object):
         return self._component_name
 
     def __eq__(self, o: object) -> bool:
-        return self.name == o.name and self.value == o.value and self.component_name == o.component_name
+        return (
+            self.name == o.name
+            and self.value == o.value
+            and self.component_name == o.component_name
+        )
 
 
 class Property(object):
@@ -114,4 +118,8 @@ class Property(object):
         return self._component_name
 
     def __eq__(self, o: object) -> bool:
-        return self.name == o.name and self.value == o.value and self.component_name == o.component_name
+        return (
+            self.name == o.name
+            and self.value == o.value
+            and self.component_name == o.component_name
+        )

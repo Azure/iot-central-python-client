@@ -16,8 +16,7 @@ build
 dist
 
 # virtualenv
-.env2
-.env3
+.pyenv
 Include/
 Lib/
 Scripts/

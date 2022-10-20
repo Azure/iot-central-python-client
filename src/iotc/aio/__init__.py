@@ -77,10 +77,23 @@ class ConsoleLogger:
 
 class IoTCClient(AbstractClient):
     def __init__(
-        self, device_id, scope_id, cred_type, key_or_cert, logger=None, storage=None, max_connection_attempts=5
+        self,
+        device_id,
+        scope_id,
+        cred_type,
+        key_or_cert,
+        logger=None,
+        storage=None,
+        max_connection_attempts=5,
     ):
         AbstractClient.__init__(
-            self, device_id, scope_id, cred_type, key_or_cert, storage, max_connection_attempts
+            self,
+            device_id,
+            scope_id,
+            cred_type,
+            key_or_cert,
+            storage,
+            max_connection_attempts,
         )
         if logger is None:
             self._logger = ConsoleLogger(IOTCLogLevel.IOTC_LOGGING_API_ONLY)
@@ -133,8 +146,8 @@ class IoTCClient(AbstractClient):
                                 "value": property_value,
                                 "ac": 200,
                                 "ad": "Completed",
-                                "av": property_version
-                            }
+                                "av": property_version,
+                            },
                         }
                     }
                 )
@@ -162,8 +175,9 @@ class IoTCClient(AbstractClient):
                 continue
             # check if component
             try:
-                is_component = str(
-                    type(patch[prop])) == "<class 'dict'>" and patch[prop]["__t"]
+                is_component = (
+                    str(type(patch[prop])) == "<class 'dict'>" and patch[prop]["__t"]
+                )
             except KeyError:
                 pass
             if is_component:
@@ -287,7 +301,9 @@ class IoTCClient(AbstractClient):
         :raises exception: If connection fails
         """
 
-        if self._connection_attempts_count > self._max_connection_attempts:  # max number of retries. exit
+        if (
+            self._connection_attempts_count > self._max_connection_attempts
+        ):  # max number of retries. exit
             self._terminate = True
             self._connecting = False
             return
@@ -325,8 +341,7 @@ class IoTCClient(AbstractClient):
                 self._cert_file = self._key_or_cert["cert_file"]
                 try:
                     self._cert_phrase = self._key_or_cert["cert_phrase"]
-                    x509 = X509(self._cert_file, self._key_file,
-                                self._cert_phrase)
+                    x509 = X509(self._cert_file, self._key_file, self._cert_phrase)
                 except:
                     await self._logger.debug(
                         "No passphrase available for certificate. Trying without it"
@@ -339,13 +354,15 @@ class IoTCClient(AbstractClient):
                         registration_id=self._device_id,
                         id_scope=self._scope_id,
                         x509=x509,
+                        product_info=self._model_id,
                     )
                 )
 
             if self._model_id:
-                print("Provision model Id")
+                await self._logger._log(f"Provisioning with model Id: '{self._model_id}'")
                 self._provisioning_client.provisioning_payload = {
-                    "iotcModelId": self._model_id
+                    "iotcModelId": self._model_id,
+                    "modelId": self._model_id,
                 }
             try:
                 registration_result = await self._provisioning_client.register()
@@ -370,8 +387,7 @@ class IoTCClient(AbstractClient):
 
             except Exception as e:
                 await self._logger.info(
-                    "ERROR: Failed to get device provisioning information. {}".format(
-                        e)
+                    "ERROR: Failed to get device provisioning information. {}".format(e)
                 )
                 sys.exit(1)
         # Connect to iothub
@@ -381,22 +397,30 @@ class IoTCClient(AbstractClient):
                 IOTCConnectType.IOTC_CONNECT_SYMM_KEY,
             ):
                 self._device_client = IoTHubDeviceClient.create_from_connection_string(
-                    _credentials.connection_string
+                    _credentials.connection_string, product_info=self._model_id
                 )
             else:
-                if 'cert_phrase' in _credentials.certificate:
+                if "cert_phrase" in _credentials.certificate:
                     x509 = X509(
-                        _credentials.certificate['cert_file'], _credentials.certificate['key_file'], _credentials.certificate['cert_phrase'])
+                        _credentials.certificate["cert_file"],
+                        _credentials.certificate["key_file"],
+                        _credentials.certificate["cert_phrase"],
+                    )
                 else:
                     x509 = X509(
-                        _credentials.certificate['cert_file'], _credentials.certificate['key_file'])
+                        _credentials.certificate["cert_file"],
+                        _credentials.certificate["key_file"],
+                    )
                 self._device_client = IoTHubDeviceClient.create_from_x509_certificate(
                     x509=x509,
                     hostname=_credentials.hub_name,
                     device_id=_credentials.device_id,
+                    product_info=self._model_id
                 )
             await self._device_client.connect()
-            await self._logger.debug("Device connected to '{}'".format(_credentials.hub_name))
+            await self._logger.debug(
+                "Device connected to '{}'".format(_credentials.hub_name)
+            )
             self._connecting = False
             self._twin = await self._device_client.get_twin()
             await self._logger.debug("Current twin: {}".format(self._twin))
@@ -411,11 +435,13 @@ class IoTCClient(AbstractClient):
             await self.connect(True)
 
         # setup listeners
-        self._device_client.on_twin_desired_properties_patch_received = self._on_properties
+        self._device_client.on_twin_desired_properties_patch_received = (
+            self._on_properties
+        )
         self._device_client.on_method_request_received = self._on_commands
         self._device_client.on_message_received = self._on_enqueued_commands
 
-        if hasattr(self, '_conn_thread') and self._conn_thread is not None:
+        if hasattr(self, "_conn_thread") and self._conn_thread is not None:
             try:
                 self._conn_thread.cancel()
                 await self._conn_thread
@@ -438,10 +464,8 @@ class IoTCClient(AbstractClient):
     async def disconnect(self):
         await self._logger.info("Received shutdown signal")
         self._terminate = True
-        if hasattr(self, '_conn_thread') and self._conn_thread is not None:
-            tasks = asyncio.gather(
-                self._conn_thread
-            )
+        if hasattr(self, "_conn_thread") and self._conn_thread is not None:
+            tasks = asyncio.gather(self._conn_thread)
         try:
             await tasks
         except:
